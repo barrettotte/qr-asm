@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?><fo:root xmlns:fo="http://www.w3.org/1999/XSL/Format"><fo:layout-master-set><fo:simple-page-master margin-right="1in" margin-left="1in" margin-bottom="0.5in" margin-top="0.5in" page-width="8.5in" page-height="11in" master-name="A4"><fo:region-body/></fo:simple-page-master></fo:layout-master-set><fo:page-sequence master-reference="A4"><fo:flow flow-name="xsl-region-body"><fo:block text-align="center" space-after="7mm" font-weight="bold" font-size="15pt">Barrett Otte's Repositories
+        </fo:block><fo:block text-align="center" font-size="10pt">
+            https://github.com/barrettotte</fo:block><fo:block font-size="10pt">
+            TODO: QR code
+        </fo:block><fo:block font-size="10pt">
+            TODO: repository lists
+        </fo:block></fo:flow></fo:page-sequence></fo:root>

@@ -13,7 +13,6 @@ import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
 
 import org.apache.fop.apps.FOPException;
-import org.apache.fop.apps.FOUserAgent;
 import org.apache.fop.apps.Fop;
 import org.apache.fop.apps.FopFactory;
 import org.apache.fop.apps.MimeConstants;
@@ -21,35 +20,30 @@ import org.apache.fop.apps.MimeConstants;
 public class FopUtils {
 
     // use FO file to generate a PDF
-    public void generatePDF(final File xsltFile, final File xmlSrc, final String outPath) 
+    public static void generatePDF(final File xsltFile, final File xmlSrc, final String outPath) 
       throws IOException, FOPException, TransformerException 
     {
-        final StreamSource xmlStream = new StreamSource(xmlSrc);
-        final FopFactory fopFactory = FopFactory.newInstance(new File(".").toURI());
-        final FOUserAgent agent = fopFactory.newFOUserAgent();
         final OutputStream out = new FileOutputStream(outPath);
-
         try {
-            final Fop fop = fopFactory.newFop(MimeConstants.MIME_PDF, agent, out);
+            final FopFactory fopFactory = FopFactory.newInstance(new File(".").toURI());
+            final Fop fop = fopFactory.newFop(MimeConstants.MIME_PDF, fopFactory.newFOUserAgent(), out);
             final TransformerFactory factory = TransformerFactory.newInstance();
             final Transformer transformer = factory.newTransformer(new StreamSource(xsltFile));
-            transformer.transform(xmlStream, new SAXResult(fop.getDefaultHandler()));
+            transformer.transform(new StreamSource(xmlSrc), new SAXResult(fop.getDefaultHandler()));
         } finally {
             out.close();
         }
     }
-    
+
     // generate XSL-FO (Formatting Objects) file 
     public static void generateFO(final File xsltFile, final File xmlSrc, final String outPath) 
       throws IOException, FOPException, TransformerException
     {
-        final StreamSource xmlStream = new StreamSource(xmlSrc);
-        final OutputStream out = new FileOutputStream(outPath);
-        
+        final OutputStream out = new FileOutputStream(outPath);   
         try {
             final TransformerFactory factory = TransformerFactory.newInstance();
             final Transformer transformer = factory.newTransformer(new StreamSource(xsltFile));
-            transformer.transform(xmlStream, new StreamResult(out));
+            transformer.transform(new StreamSource(xmlSrc), new StreamResult(out));
         } finally {
             out.close();
         }
