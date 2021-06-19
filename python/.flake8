@@ -1,0 +1,3 @@
+[flake8]
+ignore = E501,  # line too long
+         E701   # multiple statements on one line
