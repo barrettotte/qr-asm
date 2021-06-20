@@ -9,6 +9,7 @@
 #   - https://www.youtube.com/watch?v=Ct2fyigNgPY
 
 from PIL import Image
+import math
 import galois
 
 # mode indicators
@@ -362,8 +363,6 @@ def add_format_bits(qr_mat, qr_size, fmt_bits):
     # break up format bits to place near finder patterns
     high_bits = fmt_bits[0:7]  # MSB=0
     low_bits = fmt_bits[8:15]  # LSB=14
-    print(high_bits)
-    print(low_bits)
 
     # top left format bits
     x = 0
@@ -396,7 +395,7 @@ def add_format_bits(qr_mat, qr_size, fmt_bits):
     return qr_mat
 
 
-# Evaluate penalty for rule 1: each group of 5 or more same-colored modules in a row or col
+# Evaluate penalty for rule 1: group of 5 or more same-colored modules in a row or col
 def eval_rule_1(masked, qr_size):
     row_count = 0
     col_count = 0
@@ -434,7 +433,7 @@ def eval_rule_1(masked, qr_size):
     return penalty_horizontal + penalty_vertical
 
 
-# Evaluate penalty for rule 2: penalty for each 2x2 area of same colored modules
+# Evaluate penalty for rule 2: 2x2 area of same colored modules
 def eval_rule_2(masked, qr_size):
     penalty = 0
     for x in range(qr_size):
@@ -456,9 +455,24 @@ def eval_rule_2(masked, qr_size):
     return penalty
                         
 
-# Evaluate penalty for rule 3: penalty for 10111010000 and 00001011101
+# Evaluate penalty for rule 3: occurrences of 10111010000 and 00001011101 in rows/cols
 def eval_rule_3(masked, qr_size):
-    pass
+    return 0  # skipping this...could not get it working for some reason...
+
+
+# Evaluate penalty for rule 4: ratio of light to dark modules
+def eval_rule_4(masked, qr_size):
+    white = 0
+    black = 0
+    for x in range(qr_size):
+        for y in range(qr_size):
+            idx = (y * qr_size) + x
+            if masked[idx] == 1:
+                black += 1
+            else:
+                white += 1
+    total = white + black
+    return ((abs(black * 20 - total * 10) + total - 1) // (total - 1)) * 10
 
 
 # apply each mask and use penalty to determine most ideal
@@ -473,24 +487,25 @@ def apply_ideal_mask(qr_mat, qr_size, err_lvl):
         masked = add_format_bits(qr_mat, qr_size, fmt_bits)
         masked = apply_mask(mask, masked, qr_size)
 
-        rule_1_penalty = eval_rule_1(masked, qr_size)
-        print(f"mask {mask_idx} rule 1 penalty: {rule_1_penalty}")
-        rule_2_penalty = eval_rule_2(masked, qr_size)
-        print(f"mask {mask_idx} rule 2 penalty: {rule_2_penalty}")
-        
-        penalty += rule_1_penalty + rule_2_penalty
+        penalty_1 = eval_rule_1(masked, qr_size)
+        penalty_2 = eval_rule_2(masked, qr_size)
+        penalty_3 = eval_rule_3(masked, qr_size)
+        penalty_4 = eval_rule_4(masked, qr_size)
+        penalty += penalty_1 + penalty_2 + penalty_3 + penalty_4 
+
+        # print(f"mask {mask_idx} rule 1 penalty: {penalty_1}")
+        # print(f"mask {mask_idx} rule 2 penalty: {penalty_2}")
+        # print(f"mask {mask_idx} rule 3 penalty: {penalty_3}")
+        # print(f"mask {mask_idx} rule 4 penalty: {penalty_4}")
 
         if penalty < min_penalty:
             min_penalty = penalty
             ideal_mask_idx = mask_idx
         print(f"mask {mask_idx} has penalty {penalty}")
-
     print(f"ideal mask is mask {ideal_mask_idx}")
-    ideal_mask_idx = 3  # TODO: temp
 
     # apply ideal mask
     fmt_bits = calc_fmt_bits(err_lvl, ideal_mask_idx)
-    print(fmt_bits)
     masked = apply_mask(masks[ideal_mask_idx], qr_mat, qr_size)
     final_mat = add_format_bits(masked, qr_size, fmt_bits)
     return final_mat
@@ -712,19 +727,15 @@ def main():
 
     # place data zigzag pattern
     qr_mat = zigzag_data(qr_mat, qr_size, data)
-
-    # debug print unmasked QR code
     print_matrix(qr_mat, qr_size)
 
     # determine and apply ideal mask
     qr_mat = apply_ideal_mask(qr_mat, qr_size, err_lvl)
-
     print('')
     print_matrix(qr_mat, qr_size)
+
+    # add quiet zone and save to file
     qr_mat = add_quiet_zone(qr_mat, qr_size)
-    print_matrix(qr_mat, qr_size + 8)
-
     mat_to_file(qr_mat, qr_size + 8, './qrcode.png')
-
 
 if __name__ == '__main__': main()
