@@ -1,6 +1,6 @@
 # scratchpad program to make a QR code from scratch.
 #
-# this looks really bad because I'm trying to keep it simple
+# this looks really bad because I'm trying to keep it as simple as possible
 # for when I port this to ARM assembly.
 #
 # reference:
@@ -8,6 +8,7 @@
 #   - Reed Solomon Encoding (Computerphile) https://www.youtube.com/watch?v=fBRMaEAFLE0
 #   - https://www.youtube.com/watch?v=Ct2fyigNgPY
 
+from PIL import Image
 import galois
 
 # mode indicators
@@ -46,6 +47,41 @@ EC_CONFIG_LOOKUP = [
     # and so on...to 40
 ]
 
+# https://www.thonky.com/qr-code-tutorial/format-version-tables
+VERSION_INFO_LOOKUP = [
+    '', '', '', '', '', '',  # starts at version 7 w/one indexing
+    '000111110010010100', '001000010110111100', '001001101010011001', '001010010011010011',  # 7-10
+    '001011101111110110', '001100011101100010', '001101100001000111', '001110011000001101',  # 11-14
+    '001111100100101000', '010000101101111000', '010001010001011101', '010010101000010111',  # 15-18
+    '010011010100110010', '010100100110100110', '010101011010000011', '010110100011001001',  # 19-22
+    '010111011111101100', '011000111011000100', '011001000111100001', '011010111110101011',  # 23-26
+    '011011000010001110', '011100110000011010', '011101001100111111', '011110110101110101',  # 27-30
+    '011111001001010000', '100000100111010101', '100001011011110000', '100010100010111010',  # 31-34
+    '100011011110011111', '100100101100001011', '100101010000101110', '100110101001100100',  # 35-38
+    '100111010101000001', '101000110001101001'                                               # 39-40
+]
+
+# https://www.thonky.com/qr-code-tutorial/format-version-tables
+FMT_INFO_LOOKUP = [
+    [    # L
+        '111011111000100', '111001011110011', '111110110101010', '111100010011101',
+        '110011000101111', '110001100011000', '110110001000001', '110100101110110'
+    ],
+    [    # M
+        '101010000010010', '101000100100101', '101111001111100', '101101101001011',
+        '100010111111001', '100000011001110', '100111110010111', '100101010100000'
+    ],
+    [
+        # Q
+        '011010101011111', '011000001101000', '011111100110001', '011101000000110',
+        '010010010110100', '010000110000011', '010111011011010', '010101111101101'
+    ],
+    [   # H
+        '001011010001001', '001001110111110', '001110011100111', '001100111010000',
+        '000011101100010', '000001001010101', '000110100001100', '000100000111011'
+    ]
+]
+
 REMAINDER_LOOKUP = [
     0,  # one indexing
     0, 7, 7, 7, 7, 7, 0, 0, 0, 0,
@@ -69,6 +105,7 @@ ALIGNMENT_PATTERN_LOOK = [
 ]
 
 # adjust indices for lookup tables based on error level
+# fixes issue with LMQH ordering
 ERROR_IDX_TO_LOOKUP = [1, 0, 3, 2]
 
 
@@ -164,56 +201,56 @@ def print_matrix(qr_mat, qr_size):
 def get_masks(qr_size):
     masks = []
 
-    # mask 0 - (x + y) % 2
+    # mask 0
     mask = [0] * (qr_size ** 2)
     for y in range(qr_size):
         for x in range(qr_size):
             mask[(y * qr_size) + x] = 1 if ((x + y) % 2) == 0 else 0
     masks.append(mask)
 
-    # mask 1 - (y % 2)
+    # mask 1
     mask = [0] * (qr_size ** 2)
     for y in range(qr_size):
         for x in range(qr_size):
             mask[(y * qr_size) + x] = 1 if (y % 2) == 0 else 0
     masks.append(mask)
 
-    # mask 2 - (x % 3)
+    # mask 2
     mask = [0] * (qr_size ** 2)
     for y in range(qr_size):
         for x in range(qr_size):
             mask[(y * qr_size) + x] = 1 if (x % 3) == 0 else 0
     masks.append(mask)
 
-    # mask 3 - (x + y) % 3
+    # mask 3
     mask = [0] * (qr_size ** 2)
     for y in range(qr_size):
         for x in range(qr_size):
             mask[(y * qr_size) + x] = 1 if ((x + y) % 3) == 0 else 0
     masks.append(mask)
 
-    # mask 4 - (x // 3 + y // 2) % 2
+    # mask 4
     mask = [0] * (qr_size ** 2)
     for y in range(qr_size):
         for x in range(qr_size):
             mask[(y * qr_size) + x] = 1 if ((x // 3 + y // 2) % 2) == 0 else 0
     masks.append(mask)
 
-    # mask 5 - (x * y % 2) + (x * y % 3)
+    # mask 5
     mask = [0] * (qr_size ** 2)
     for y in range(qr_size):
         for x in range(qr_size):
             mask[(y * qr_size) + x] = 1 if ((x * y % 2) + (x * y % 3)) == 0 else 0
     masks.append(mask)
 
-    # mask 6 - ((x * y) % 2 + x * y % 3) % 2
+    # mask 6
     mask = [0] * (qr_size ** 2)
     for y in range(qr_size):
         for x in range(qr_size):
             mask[(y * qr_size) + x] = 1 if (((x * y) % 2 + x * y % 3) % 2) == 0 else 0
     masks.append(mask)
 
-    # mask 7 - ((x + y) % 2 + x * y % 3) % 2)
+    # mask 7
     mask = [0] * (qr_size ** 2)
     for y in range(qr_size):
         for x in range(qr_size):
@@ -226,9 +263,8 @@ def get_masks(qr_size):
 # apply mask to QR matrix (not affecting non-function modules)
 def apply_mask(mask, qr_mat, qr_size):
     masked = [0] * (qr_size ** 2)
-
-    for y in range(qr_size):
-        for x in range(qr_size):
+    for x in range(qr_size):
+        for y in range(qr_size):
             idx = (y * qr_size) + x
             module = qr_mat[idx]
 
@@ -236,10 +272,81 @@ def apply_mask(mask, qr_mat, qr_size):
             if module < 0:
                 masked[idx] = abs(module) ^ mask[idx]
             else:
-                if module == 3:
-                    module = 0  # reserved
-                masked[idx] = abs(module)
+                masked[idx] = module
     return masked
+
+
+# calculate format bits
+def calc_fmt_bits(err_lvl, mask_idx):
+    fmt_bits = int_to_bits(err_lvl, 2) + int_to_bits(mask_idx, 3)
+    err_bits = (fmt_bits + ('0' * 10)).lstrip('0')
+
+    # calculate error correction bits
+    while len(err_bits) >= 11:
+        # build generator polynomial
+        res = ''
+        gen_bits = '10100110111'  # $x^{10}+x^8+x^5+x^4+x^2+x+1$
+
+        # pad generator polynomial to match length of format bits
+        while len(gen_bits) != len(err_bits):
+            gen_bits += '0'
+
+        # XOR generator bits with format string
+        for i in range(len(gen_bits)):
+            res += str(int(gen_bits[i]) ^ int(err_bits[i]))
+        err_bits = res.lstrip('0')
+
+    # repad to 10-bits
+    while len(err_bits) < 10:
+        err_bits = '0' + err_bits
+
+    # combine format and error correction bits
+    fmt_bits += err_bits
+    final_fmt_bits = ''
+    for i in range(len(fmt_bits)):
+        final_fmt_bits += str(int(fmt_bits[i]) ^ int('101010000010010'[i]))
+
+    lookup_fmt = FMT_INFO_LOOKUP[ERROR_IDX_TO_LOOKUP[err_lvl]][mask_idx]
+    assert final_fmt_bits == lookup_fmt
+
+    return final_fmt_bits
+
+
+# add format bits adjacent to finders
+def add_format_bits(qr_mat, qr_size, fmt_bits):
+    # break up format bits to place near finder patterns
+    high_bits = fmt_bits[0:7]  # MSB=0
+    low_bits = fmt_bits[8:15]  # LSB=14
+
+    # top left format bits
+    x = 0
+    y = 8
+    for i in range(len(high_bits)):
+        if i == 6:
+            x += 1  # skip vertical timing
+        qr_mat[(y * qr_size) + x] = int(high_bits[i])
+        x += 1
+    x = 8
+    y = 7
+    for j in range(len(low_bits)):
+        if j == 1:
+            y -= 1  # skip horizontal timing
+        qr_mat[(y * qr_size) + x] = int(low_bits[j])
+        y -= 1
+
+    # top right format bits
+    x = qr_size - 7
+    y = 8
+    for i in range(len(low_bits)):
+        qr_mat[(y * qr_size) + x + i] = int(low_bits[i])
+
+    # bottom left format bits
+    x = 8
+    y = qr_size - 1
+    for i in range(len(low_bits)):
+        qr_mat[((y - i) * qr_size) + x] = int(high_bits[i])
+
+    return qr_mat
 
 
 # Evaluate penalty for rule 1: each group of 5 or more same-colored modules in a row or col
@@ -277,13 +384,36 @@ def eval_rule_1(masked, qr_size):
             prev_row = module
         row_count = 0
         prev_col = 0
-
     return penalty_horizontal + penalty_vertical
 
 
 # Evaluate penalty for rule 2: penalty for each 2x2 area of same colored modules
 def eval_rule_2(masked, qr_size):
     return 0
+
+
+# apply each mask and use penalty to determine most ideal
+def apply_ideal_mask(qr_mat, qr_size, err_lvl):
+    masks = get_masks(qr_size)
+    min_penalty = 99999999
+    ideal_mask_idx = -1
+
+    for mask_idx, mask in enumerate(masks):
+        penalty = 0
+        fmt_bits = calc_fmt_bits(err_lvl, mask_idx)
+        masked = add_format_bits(qr_mat, qr_size, fmt_bits)
+        masked = apply_mask(mask, masked, qr_size)
+
+        penalty += eval_rule_1(masked, qr_size)
+        penalty += eval_rule_2(masked, qr_size)
+        if penalty < min_penalty:
+            min_penalty = penalty
+            ideal_mask_idx = mask_idx
+
+    # apply ideal mask
+    fmt_bits = calc_fmt_bits(err_lvl, ideal_mask_idx)
+    fmt_mat = add_format_bits(qr_mat, qr_size, fmt_bits)
+    return apply_mask(masks[ideal_mask_idx], fmt_mat, qr_size)
 
 
 def main():
@@ -444,10 +574,9 @@ def main():
     print(f"QR matrix : {qr_size} x {qr_size} - {len(qr_mat)} module(s)\n")
 
     # place reserved areas - finders overlay on top of these
-    if version > 7:
-        # v > 7 requires more reserved area...lets just skip it
+    # version 7 and greater requires more reserved area...lets just skip it
+    if version >= 7:
         raise Exception("QR versions greater than 6 are not supported")
-
     qr_mat = draw_square(qr_mat, qr_size, 0, 0, 9, 3)                  # top left
     qr_mat = draw_square(qr_mat, qr_size, (qr_size - 7) - 1, 0, 9, 3)  # top right
     qr_mat = draw_square(qr_mat, qr_size, 0, (qr_size - 7), 9, 3)      # bottom left
@@ -463,7 +592,6 @@ def main():
         c = 1 if is_fill else 0
         qr_mat[(6) * qr_size + (j)] = c
         is_fill = not is_fill
-    # (x + i + offset) * qr_size + (y + j + offset)
 
     # place finders
     qr_mat = place_finder(qr_mat, qr_size, 0, 0)              # top left
@@ -520,41 +648,22 @@ def main():
             y -= 1
             x -= 1
 
-    # debug print to console
+    # debug print unmasked QR code
     print_matrix(qr_mat, qr_size)
 
-    # determine best mask
-    masks = get_masks(qr_size)
-    min_penalty = 99999999
-    ideal_mask_idx = -1
+    # determine and apply ideal mask
+    qr_mat = apply_ideal_mask(qr_mat, qr_size, err_lvl)
 
-    for mask_idx, mask in enumerate(masks):
-        penalty = 0
-        masked = apply_mask(mask, qr_mat, qr_size)
-        print_matrix(masked, qr_size)
+    print('')
+    print_matrix(qr_mat, qr_size)
+    print(qr_mat)
 
-        penalty += eval_rule_1(masked, qr_size)
-        penalty += eval_rule_2(masked, qr_size)
-
-        if penalty < min_penalty:
-            min_penalty = penalty
-            ideal_mask_idx = mask_idx
-
-        print(f"mask {mask_idx} : {penalty}\n\n\n")
-
-    print(f"minimum penalty is {min_penalty}. Ideal mask is mask {ideal_mask_idx}")
-
-    # save QR code to bitmap image
-    masked = apply_mask(masks[ideal_mask_idx], qr_mat, qr_size)
-
-    fmt_str = int_to_bits(err_lvl, 2) + int_to_bits(ideal_mask_idx, 3) + '0000000000'
-    fmt_str = fmt_str.lstrip('0')  # leading zeros must be removed
-    print(f"fmt bits: {fmt_str}")
-    fmt_poly = galois.Polynomial([int(b) for b in fmt_str])
-    print(f"fmt = {fmt_poly}")
-
-    gen_poly = galois.Polynomial([1, 0, 1, 0, 0, 1, 1, 0, 1, 1, 1][::-1])
-    print(f"gen = {gen_poly}")
+    img = Image.new(mode='1', size=(qr_size, qr_size))
+    for x in range(qr_size):
+        for y in range(qr_size):
+            pixel = qr_mat[(y * qr_size) + x]
+            img.putpixel((x, y), pixel)
+    img.save('./qrcode.png')
 
 
 if __name__ == '__main__': main()

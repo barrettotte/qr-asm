@@ -119,7 +119,6 @@ class Polynomial():
         else:
             min_poly = self
             max_poly = other
-
         for i in range(len(min_poly.terms)):
             if self.terms[i] != other.terms[i]:
                 return False
@@ -152,7 +151,6 @@ def poly_normalize(p: Polynomial):
         if p.terms[i] != 0:
             break
         max_nz = i - 1
-
     if max_nz < 0:
         return Polynomial([0])
     elif max_nz < (len(p.terms) - 1):
@@ -165,7 +163,6 @@ def poly_add(a: Polynomial, b: Polynomial):
     term_len = len(a.terms)
     if len(b.terms) > term_len:
         term_len = len(b.terms)
-
     p = Polynomial([0] * term_len)
 
     for i in range(term_len):
@@ -181,7 +178,6 @@ def poly_add(a: Polynomial, b: Polynomial):
 # multiply two polynomials
 def poly_mul(a: Polynomial, b: Polynomial):
     p = Polynomial([0] * (len(a.terms) + len(b.terms)))
-
     for i in range(len(a.terms)):
         for j in range(len(b.terms)):
             if a.terms[i] != 0 and b.terms[j] != 0:
@@ -219,9 +215,18 @@ def new_monomial(term: int, degree: int):
 def get_gen_poly(degree: int):
     if degree < 2:
         raise Exception('generator polynomial degree must be greater than 2')
-
     gp = Polynomial([1])
     for i in range(degree):
         np = Polynomial([GF256_ANTILOG[i], 1])
         gp = poly_mul(gp, np)
     return gp
+
+
+# create a polynomial from bit string
+def bits_to_poly(bits: str):
+    return Polynomial([int(bits[i]) for i in range(len(bits))])
+
+
+# create bit string from polynomial
+def poly_to_bits(p: Polynomial):
+    return ''.join(['1' if t > 0 else '0' for t in p.terms])
