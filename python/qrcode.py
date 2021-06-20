@@ -175,16 +175,59 @@ def draw_square(qr_mat, qr_size, x, y, n, c):
 
 # place finder pattern in QR code matrix with left corner at (x,y)
 def place_finder(qr_mat, qr_size, x, y):
-    qr_mat = draw_square(qr_mat, qr_size, x - 1, y - 1, 9, 0)  # separator
-    qr_mat = draw_square(qr_mat, qr_size, x, y, 7, 1)          # outer
-    qr_mat = draw_square(qr_mat, qr_size, x + 1, y + 1, 5, 0)  # inner
-    qr_mat = draw_square(qr_mat, qr_size, x + 2, y + 2, 3, 1)  # center
+    qr_mat = draw_square(qr_mat, qr_size, x - 1, y - 1, 9, 3)  # separator
+    qr_mat = draw_square(qr_mat, qr_size, x, y, 7, 4)          # outer
+    qr_mat = draw_square(qr_mat, qr_size, x + 1, y + 1, 5, 3)  # inner
+    qr_mat = draw_square(qr_mat, qr_size, x + 2, y + 2, 3, 4)  # center
     return qr_mat
+
+
+# traverse data and place using zigzag pattern
+def zigzag_data(qr_mat, qr_size, data):
+    x = qr_size - 1
+    y = qr_size - 1
+    data_idx = 0
+    zig = True
+    up = True
+
+    while data_idx < len(data):
+        # reached edge, bounce back
+        if y == qr_size:
+            up = not up
+            x -= 2
+            zig = True
+            y = qr_size - 1
+        elif y < 0:
+            up = not up
+            x -= 2
+            zig = True
+            y = 0
+        next_mod = qr_mat[(y * qr_size) + x]
+
+        # zig zag past existing structure
+        if next_mod == 2:
+            qr_mat[(y * qr_size) + x] = int(data[data_idx])
+            data_idx += 1
+
+        # zig or zag
+        if zig:
+            x -= 1
+        else:
+            y += 1 if not up else -1
+            x += 1
+        zig = not zig
+
+        # skip over timing patterns
+        if x == 6:
+            y -= 1
+            x -= 1
+    return qr_mat
+
 
 
 # print matrix to console
 def print_matrix(qr_mat, qr_size):
-    icons = ['⬜', '⬛', '❓', '⬜']
+    icons = ['⬜', '⬛', '❓', '❌', '❌']
     for i in range(qr_size):
         for j in range(qr_size):
             module = abs(qr_mat[i * qr_size + j])
@@ -263,16 +306,18 @@ def get_masks(qr_size):
 # apply mask to QR matrix (not affecting non-function modules)
 def apply_mask(mask, qr_mat, qr_size):
     masked = [0] * (qr_size ** 2)
-    for x in range(qr_size):
-        for y in range(qr_size):
+    for y in range(qr_size):
+        for x in range(qr_size):
             idx = (y * qr_size) + x
             module = qr_mat[idx]
 
-            # negative is data/err correction
-            if module < 0:
-                masked[idx] = abs(module) ^ mask[idx]
-            else:
-                masked[idx] = module
+            # 3-4 are reserved
+            if module < 2:
+                masked[idx] = module ^ mask[idx]
+            elif module == 3:
+                masked[idx] = 0  # swap out reserved '0'
+            elif module == 4:
+                masked[idx] = 1  # swap out reserved '1'
     return masked
 
 
@@ -317,6 +362,8 @@ def add_format_bits(qr_mat, qr_size, fmt_bits):
     # break up format bits to place near finder patterns
     high_bits = fmt_bits[0:7]  # MSB=0
     low_bits = fmt_bits[8:15]  # LSB=14
+    print(high_bits)
+    print(low_bits)
 
     # top left format bits
     x = 0
@@ -371,7 +418,7 @@ def eval_rule_1(masked, qr_size):
             penalty_vertical += 1
 
         for x in range(qr_size):
-            module = abs(masked[(y * qr_size) + x])
+            module = masked[(y * qr_size) + x]
             if module == prev_row:
                 row_count += 1
             else:
@@ -389,7 +436,29 @@ def eval_rule_1(masked, qr_size):
 
 # Evaluate penalty for rule 2: penalty for each 2x2 area of same colored modules
 def eval_rule_2(masked, qr_size):
-    return 0
+    penalty = 0
+    for x in range(qr_size):
+        for y in range(qr_size):
+            idx = (y * qr_size) + x
+            if (x < qr_size - 1) and (y < qr_size - 1) and (y > 0):
+                is_square = True
+                test = masked[idx]  # top left
+
+                if test != masked[idx + 1]:
+                    is_square = False  # top right
+                elif test != masked[idx + qr_size]:
+                    is_square = False  # bottom left
+                elif test != masked[idx + qr_size + 1]:
+                    is_square = False  # bottom right
+
+                if is_square:
+                    penalty += 3
+    return penalty
+                        
+
+# Evaluate penalty for rule 3: penalty for 10111010000 and 00001011101
+def eval_rule_3(masked, qr_size):
+    pass
 
 
 # apply each mask and use penalty to determine most ideal
@@ -404,17 +473,50 @@ def apply_ideal_mask(qr_mat, qr_size, err_lvl):
         masked = add_format_bits(qr_mat, qr_size, fmt_bits)
         masked = apply_mask(mask, masked, qr_size)
 
-        penalty += eval_rule_1(masked, qr_size)
-        penalty += eval_rule_2(masked, qr_size)
+        rule_1_penalty = eval_rule_1(masked, qr_size)
+        print(f"mask {mask_idx} rule 1 penalty: {rule_1_penalty}")
+        rule_2_penalty = eval_rule_2(masked, qr_size)
+        print(f"mask {mask_idx} rule 2 penalty: {rule_2_penalty}")
+        
+        penalty += rule_1_penalty + rule_2_penalty
+
         if penalty < min_penalty:
             min_penalty = penalty
             ideal_mask_idx = mask_idx
+        print(f"mask {mask_idx} has penalty {penalty}")
+
+    print(f"ideal mask is mask {ideal_mask_idx}")
+    ideal_mask_idx = 3  # TODO: temp
 
     # apply ideal mask
     fmt_bits = calc_fmt_bits(err_lvl, ideal_mask_idx)
-    fmt_mat = add_format_bits(qr_mat, qr_size, fmt_bits)
-    return apply_mask(masks[ideal_mask_idx], fmt_mat, qr_size)
+    print(fmt_bits)
+    masked = apply_mask(masks[ideal_mask_idx], qr_mat, qr_size)
+    final_mat = add_format_bits(masked, qr_size, fmt_bits)
+    return final_mat
 
+
+# add 4 module wide area of light modules (quiet zone)
+def add_quiet_zone(qr_mat, qr_size):
+    quieted = [0] * ((qr_size + 8) ** 2)
+    for x in range(0, qr_size):
+        for y in range(0, qr_size):
+            module = qr_mat[(y * qr_size) + x]
+            quieted[((y + 4) * (qr_size + 8)) + (x + 4)] = module
+    return quieted
+
+
+# save matrix to file
+def mat_to_file(qr_mat, qr_size, file_name):
+    img = Image.new(mode='1', size=(qr_size, qr_size))
+    # ohhh...bits should be reversed...
+    qr_mat = [not b for b in qr_mat]
+
+    for x in range(qr_size):
+        for y in range(qr_size):
+            pixel = qr_mat[(y * qr_size) + x]
+            img.putpixel((x, y), pixel)
+    img.save(file_name)
 
 def main():
     # encode payload
@@ -584,12 +686,12 @@ def main():
     # place timing patterns
     is_fill = True
     for i in range(qr_size):
-        c = 1 if is_fill else 0
+        c = 4 if is_fill else 3
         qr_mat[(i) * qr_size + (6)] = c
         is_fill = not is_fill
     is_fill = True
     for j in range(qr_size):
-        c = 1 if is_fill else 0
+        c = 4 if is_fill else 3
         qr_mat[(6) * qr_size + (j)] = c
         is_fill = not is_fill
 
@@ -601,52 +703,15 @@ def main():
     # place alignment pattern
     if version > 1:
         pat = ALIGNMENT_PATTERN_LOOK[version]
-        qr_mat = draw_square(qr_mat, qr_size, pat[1] - 2, pat[1] - 2, 5, 1)
-        qr_mat = draw_square(qr_mat, qr_size, pat[1] - 1, pat[1] - 1, 3, 0)
-        qr_mat = draw_square(qr_mat, qr_size, pat[1], pat[1], 1, 1)
+        qr_mat = draw_square(qr_mat, qr_size, pat[1] - 2, pat[1] - 2, 5, 4)
+        qr_mat = draw_square(qr_mat, qr_size, pat[1] - 1, pat[1] - 1, 3, 3)
+        qr_mat = draw_square(qr_mat, qr_size, pat[1], pat[1], 1, 4)
 
     # place dark module
-    qr_mat[((4 * version) + 9) * qr_size + (8)] = 1
+    qr_mat[((4 * version) + 9) * qr_size + (8)] = 4
 
-    # draw zigzag data
-    x = qr_size - 1
-    y = qr_size - 1
-    data_idx = 0
-    zig = True
-    up = True
-
-    while data_idx < len(data):
-        # reached edge, bounce back
-        if y == qr_size:
-            up = not up
-            x -= 2
-            zig = True
-            y = qr_size - 1
-        elif y < 0:
-            up = not up
-            x -= 2
-            zig = True
-            y = 0
-        next_mod = qr_mat[(y * qr_size) + x]
-
-        # zig zag past existing structure
-        if next_mod == 2:
-            # negative so we know what we can and can't mask later
-            qr_mat[(y * qr_size) + x] = -int(data[data_idx])
-            data_idx += 1
-
-        # zig or zag
-        if zig:
-            x -= 1
-        else:
-            y += 1 if not up else -1
-            x += 1
-        zig = not zig
-
-        # skip over timing patterns
-        if x == 6:
-            y -= 1
-            x -= 1
+    # place data zigzag pattern
+    qr_mat = zigzag_data(qr_mat, qr_size, data)
 
     # debug print unmasked QR code
     print_matrix(qr_mat, qr_size)
@@ -656,14 +721,10 @@ def main():
 
     print('')
     print_matrix(qr_mat, qr_size)
-    print(qr_mat)
+    qr_mat = add_quiet_zone(qr_mat, qr_size)
+    print_matrix(qr_mat, qr_size + 8)
 
-    img = Image.new(mode='1', size=(qr_size, qr_size))
-    for x in range(qr_size):
-        for y in range(qr_size):
-            pixel = qr_mat[(y * qr_size) + x]
-            img.putpixel((x, y), pixel)
-    img.save('./qrcode.png')
+    mat_to_file(qr_mat, qr_size + 8, './qrcode.png')
 
 
 if __name__ == '__main__': main()
