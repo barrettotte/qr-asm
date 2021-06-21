@@ -1,3 +1,5 @@
 *.wakatime-project
 __pycache__
 .vscode/
+
+asm-tests/bin/
