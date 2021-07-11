@@ -14,4 +14,4 @@ Generate a QR code image from scratch with ARM assembly.
 - https://www.youtube.com/watch?v=Ct2fyigNgPY
 - https://en.wikipedia.org/wiki/QR_code#Design
 - https://en.wikiversity.org/wiki/Reed%E2%80%93Solomon_codes_for_coders
-- https://syscalls.w3challs.com/?arch=arm_thumb
+- https://chromium.googlesource.com/chromiumos/docs/+/master/constants/syscalls.md#arm-32_bit_EABI
