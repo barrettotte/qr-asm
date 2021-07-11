@@ -1,22 +1,24 @@
-/* Hello world program */
+// Classic hello world
 
-.arch       armv8-a
-.syntax     unified
+.data
+
+hello:    .asciz "hello world\n"
+          len = .-hello
 
 .text
     .global main
-    main:
-        push {ip, lr}
-        
-        ldr r0, =hello
-        bl printf
 
-        mov r0, #41
-        add r0, r0, #1
+main:
+    push {ip, lr}   // prolog
 
-        pop {ip, lr}
-        bx lr
+    // write to console
+    mov r0, #1      // STDOUT file descriptor
+    ldr r1, =hello  // load address
+    mov r2, #len    // length of string
+    mov r7, #4      // write
+    swi 0           // syscall
 
-.data
-    hello:
-        .string "hello world"
+exit:
+    mov r0, #0      // exit status
+    pop {ip, pc}    // epilog
+    .end
