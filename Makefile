@@ -1,6 +1,6 @@
-# qr-asm
+# qr-asm build file
 
-BIN=qrcode
+BIN = qrcode
 SRC := $(wildcard ./*.s)
 
 all:	clean build
@@ -15,4 +15,5 @@ clean:
 debug:
 		qemu-arm -singlestep -g 1234 bin/$(BIN)
 
-# arm-none-eabi-gdb -ex 'target remote localhost:1234' -ex 'layout regs' bin/write
+# make && make debug
+# arm-none-eabi-gdb -ex 'file bin/qrcode' -ex 'target remote localhost:1234' -ex 'layout regs'

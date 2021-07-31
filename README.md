@@ -2,10 +2,18 @@
 
 Generate a QR code image from scratch with ARM assembly.
 
-- ARM cross compiler - ```apt-get install gcc-arm-linux-gnueabihf```
-- QEMU - ```apt-get install qemu-user```
-- Cross compile ARM - ```arm-linux-gnueabihf-gcc -g -static pgm.s -o bin/pgm; qemu-arm bin/pgm```
-- Debug - ```arm-none-eabi-gdb```
+This was made to learn how QR codes work and to get better with ARM assembly.
+
+## Running Locally
+
+Requires ARM cross compiler - `apt-get install gcc-arm-linux-gnueabihf`
+
+### Debugging with GDB
+
+I'm still new to GDB, but this worked for me.
+
+- `make && make debug`
+- `arm-none-eabi-gdb -ex 'file bin/qrcode' -ex 'target remote localhost:1234' -ex 'layout regs'`
 
 ## References
 
