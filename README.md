@@ -4,6 +4,14 @@ Generate a QR code image from scratch with ARM assembly.
 
 This was made to learn how QR codes work and to get better with ARM assembly.
 
+## QR Code Limitations
+
+I'm not very good at ARM assembly, so I constrained the QR code generation a bit.
+
+- Byte mode encoding only
+- QR version 6 and below
+- Mask evaluation not implemented, hardcoded to ?
+
 ## Running Locally
 
 Requires ARM cross compiler - `apt-get install gcc-arm-linux-gnueabihf`
@@ -17,9 +25,8 @@ I'm still new to GDB, but this worked for me.
 
 ## References
 
-- https://www.thonky.com/qr-code-tutorial/
-- Reed Solomon Encoding (Computerphile) https://www.youtube.com/watch?v=fBRMaEAFLE0
-- https://www.youtube.com/watch?v=Ct2fyigNgPY
-- https://en.wikipedia.org/wiki/QR_code#Design
-- https://en.wikiversity.org/wiki/Reed%E2%80%93Solomon_codes_for_coders
-- https://chromium.googlesource.com/chromiumos/docs/+/master/constants/syscalls.md#arm-32_bit_EABI
+- [ARM 32-bit EABI Syscall Reference](https://chromium.googlesource.com/chromiumos/docs/+/master/constants/syscalls.md#arm-32_bit_EABI)
+- [GNU ARM Assembler Quick Reference](https://www.ic.unicamp.br/~celio/mc404-2014/docs/gnu-arm-directives.pdf)
+- [QR Code Design Wiki](https://en.wikipedia.org/wiki/QR_code#Design)
+- [QR Code Tutorial](https://www.thonky.com/qr-code-tutorial/)
+- [Reed Solomon Codes for Coders](https://en.wikiversity.org/wiki/Reed%E2%80%93Solomon_codes_for_coders)
