@@ -34,7 +34,7 @@
             .equ CREATE, 8
 
             // Program Constants
-            .equ MAX_VERSION, 4           // max version supported (1-5)
+            .equ MAX_VERSION, 3           // max version supported (1-4)
             .equ MODE_BYTE,   0b0100      // byte encoding mode
             .equ CHAR_CT_IND, 0b1000      // char count indicator v1-v9 (bits)
             .equ BYTE_ZERO,   0b01001000  // mode + char count indicator
@@ -129,9 +129,9 @@ find_version:                      // ***** find QR version *****
             mov  r4, #MAX_VERSION  // load max QR version supported
 
 version_loop:                      // ***** Search version lookup table *****
-            ldrb r5, [r2, r1]      // capacity = tbl_version[(i * 4) + eclvl]
-            cmp  r5, r3            // compare capacity to msg_len
-            bgt  set_version       // capacity > msg_len
+            ldrb r5, [r2, r1]      // msg capacity = tbl_version[(i * 4) + eclvl]
+            cmp  r5, r3            // compare msg capacity to msg_len
+            bgt  set_version       // msg capacity > msg_len
 
             add  r0, r0, #1        // version += 1
             add  r1, r1, #4        // i += 4
@@ -140,11 +140,19 @@ version_loop:                      // ***** Search version lookup table *****
             b    bad_version       // unsupported version
 
 set_version:                       // ***** set QR version (zero indexed) *****
-            ldr  r1, =capacity     // pointer to capacity
-            strb r5, [r1]          // save capacity to memory
             ldr  r1, =version      // pointer to version
             strb r0, [r1]          // save version to memory
             // TODO: load capacity from EC config instead... 32 vs 34 (3-Q)
+
+find_ecprops:                      // ***** find error correction properties *****
+            ldr  r2, =eclvl_idx    // pointer to error correction level index
+            ldrb r2, [r2]          // load error correction level index
+            lsl  r2, r1            // x = eclvl_idx * (version)
+
+            
+ecprops_loop:
+
+
 
 pad_payload:                       // ***** Pad payload to capacity *****
             ldr  r0, =capacity     // pointer to max capacity
