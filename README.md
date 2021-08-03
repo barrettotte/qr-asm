@@ -7,9 +7,10 @@ This was made to learn how QR codes work and to get better with ARM assembly.
 ## QR Code Limitations
 
 I'm not very good at ARM assembly, so I constrained the QR code generation a bit.
+I just wanted to encode a url, not build a whole library.
 
 - Byte mode encoding only
-- QR version 6 and below
+- QR version 4 and below (up to 80 characters with v4-L)
 - Mask evaluation not implemented, hardcoded to ?
 
 ## Running Locally
