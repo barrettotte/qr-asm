@@ -4,10 +4,16 @@ Generate a QR code image from scratch with ARM assembly.
 
 This was made to learn how QR codes work and to get better with ARM assembly.
 
+## Disclaimer
+
+If its not obvious I'm bad at assembly...I'm sure there are a disgusting amount of optimizations I could have done. 
+But, I tried to keep things simple so a dummy like me could understand this a year from now.
+
+Specifically, I didn't really leverage 32-bit word size or ARM's fancy optional shifting on each instruction.
+
 ## QR Code Limitations
 
-I'm not very good at ARM assembly, so I constrained the QR code generation a bit.
-I just wanted to encode a url, not build a whole library.
+I constrained the QR code generation a lot. I just wanted to encode a url, not build a whole library.
 
 - Byte mode encoding only
 - QR version 4 and below (up to 80 characters with v4-L)
