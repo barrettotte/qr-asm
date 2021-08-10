@@ -136,23 +136,35 @@ set_ec_props:                       // ***** set error correction properties ***
             ldr  r1, =ecprop_idx    // pointer to error correction properties index
             strb r0, [r1]           // save error correction properties index
             ldr  r1, =tbl_ecprops   // pointer to error correction properties
-            ldrb r0, [r1, r0]       // load max data word capacity from EC properties
-            ldr  r1, =capacity      // pointer to max capacity
-            strb r0, [r1]           // save max capacity
-            
-            // TODO: set ecw_block from ec props
-            // TODO: set g1_blocks from ec props
-            // TODO: set g1b_words from ec props
+            ldrb r2, [r1, r0]       // load max data word capacity from EC properties
+            ldr  r3, =capacity      // pointer to max capacity
+            strb r2, [r3]           // save max capacity
+
+            add  r0, r0, #1         // increment index to ecw per block
+            ldr  r3, =ecw_block     // pointer to ecw_block
+            ldrb r2, [r1, r0]       // load ecw per block from EC properties
+            strb r2, [r3]           // save ecw per block
+
+            add  r0, r0, #1         // increment index to group 1 blocks
+            ldr  r3, =g1_blocks     // pointer to g1_blocks
+            ldrb r2, [r1, r0]       // load group 1 blocks from EC properties
+            strb r2, [r3]           // save group 1 blocks
+
+            add  r0, r0, #1         // increment index to group 1 words per block
+            ldr  r3, =g1b_words     // pointer to g1b_words
+            ldrb r2, [r1, r0]       // load group 1 words per block from EC properties
+            strb r2, [r3]           // save group 1 words per block
 
 init_payload:                       // ***** Init QR code payload *****
             mov  r1, #MODE          // load mode nibble
             lsl  r1, r1, #4         // shift nibble from low to high
             ldr  r2, =count_ind     // pointer to char count indicator
-            ldrb r2, [r2]           // load char count indicator byte
+            ldrb r3, [r2]           // load char count indicator byte
             lsr  r3, r3, #4         // drop count indicator low nibble
             orr  r0, r1, r3         // combine mode with count indicator high byte
 
             // load high nibble of first char of payload before looping
+
 
             nop
             // TODO: everything after here needs refactoring
