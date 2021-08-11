@@ -114,13 +114,13 @@ find_version:                       // ***** find QR version *****
 version_loop:                       // ***** Search version lookup table *****
             ldrb r5, [r2, r1]       // msg capacity = tbl_version[(i * 4) + eclvl]
             cmp  r5, r3             // compare msg capacity to msg_len
-            bgt  set_version        // msg capacity > msg_len
+            bgt  set_version        // if (msg capacity > msg_len)
 
             add  r0, r0, #1         // version += 1
             add  r1, r1, #4         // i += 4
             cmp  r0, r4             // compare version to max version
-            blt  version_loop       // version < MAX_VERSION
-            b    bad_version        // unsupported version
+            blt  version_loop       // while (version < MAX_VERSION)
+            b    bad_version        // unsupported version encountered
 
 set_version:                        // ***** set QR version (zero indexed) *****
             ldr  r1, =version       // pointer to version
@@ -136,9 +136,9 @@ set_ec_props:                       // ***** set error correction properties ***
             ldr  r1, =ecprop_idx    // pointer to error correction properties index
             strb r0, [r1]           // save error correction properties index
             ldr  r1, =tbl_ecprops   // pointer to error correction properties
-            ldrb r2, [r1, r0]       // load max data word capacity from EC properties
-            ldr  r3, =capacity      // pointer to max capacity
-            strb r2, [r3]           // save max capacity
+            ldrb r2, [r1, r0]       // load data word capacity from EC properties
+            ldr  r3, =capacity      // pointer to data word capacity
+            strb r2, [r3]           // save data word capacity
 
             add  r0, r0, #1         // increment index to ecw per block
             ldr  r3, =ecw_block     // pointer to ecw_block
@@ -159,14 +159,48 @@ init_payload:                       // ***** Init QR code payload *****
             mov  r1, #MODE          // load mode nibble
             lsl  r1, r1, #4         // shift nibble from low to high
             ldr  r2, =count_ind     // pointer to char count indicator
-            ldrb r3, [r2]           // load char count indicator byte
-            lsr  r3, r3, #4         // drop count indicator low nibble
-            orr  r0, r1, r3         // combine mode with count indicator high byte
+            ldrb r3, [r2]           // load char count indicator nibble
+            lsr  r4, r3, #4         // shift char indicator high nibble to low nibble
+            eor  r0, r1, r4         // combine mode nibble with count indicator high nibble
+            
+            mov  r6, #0             // payload_idx = 0
+            ldr  r7, =payload       // pointer to payload
+            strb r0, [r7, r6]       // payload[payload_idx] = mode nibble + count_ind[LOW]
+            
+            ldr  r2, =msg           // pointer to message
+            mov  r5, #msg_len       // load msg_len for loop exit
+            sub  r5, r5, #1         // msg_len --; null terminator  (TODO: remove ?)
+            mov  r8, #0             // msg_idx = 0
 
-            // load high nibble of first char of payload before looping
+inject_msg:                         // ***** Inject message into payload *****
+            add  r6, r6, #1         // payload_idx++
+            eor  r0, r0, r0         // reset scratch register for low nibble
+            eor  r1, r1, r1         // reset scratch register for high nibble
 
+            mov  r1, #0xF           // load bitmask 0b00001111
+            and  r1, r3, r1         // mask low nibble out of msg[msg_idx-1]
+            lsl  r1, r1, #4         // shift low nibble to high nibble
+            
+            ldrb r3, [r2, r8]       // load msg[msg_idx]
+            lsr  r4, r3, #4         // shift high nibble to low nibble
+            eor  r0, r1, r4         // combine high nibble with low nibble
+            strb r0, [r7, r6]       // store combined byte at payload[payload_idx]
+
+            add  r8, r8, #1         // msg_idx++
+            cmp  r8, r5             // compare msg_idx with msg_len
+            blt  inject_msg         // while (msg_idx < msg_len)
+
+            mov  r1, #0xF           // load bitmask 0b00001111
+            and  r1, r3, r1         // mask low nibble out of msg[msg_idx-1]
+            lsl  r1, r1, #4         // shift low nibble to high nibble
+            strb r1, [r7, r6]       // store last char low nibble and zero nibble padding
+
+            // r0 = r1[lo] + r3[hi]
 
             nop
+            nop
+            nop
+
             // TODO: everything after here needs refactoring
 
             ldr  r4, =payload       // pointer to payload
