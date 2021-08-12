@@ -15,6 +15,7 @@
             // Program Constants
             .equ MAX_VERSION, 3     // max version supported (1-4)
             .equ MODE, 0b0100       // byte encoding mode (nibble)
+            .equ MAX_DATA_CAP, 80   // max data capacity (v4-L)
 
             // Error Messages
 err_01:     .asciz "Invalid error correction level.\n"
@@ -31,12 +32,16 @@ version:    .space 1                // QR version
 eclvl_idx:  .space 1                // error correction level index (L,M,Q,H)
 eclvl:      .space 1                // error correction level value (1,0,3,2)
 ecprop_idx: .space 1                // error correction properties index
-capacity:   .space 1                // max capacity for data words
-ecw_block:  .space 1                // error correction words per block
-g1_blocks:  .space 1                // number of blocks in group 1
-g1b_words:  .space 1                // data words in each group 1 block
+
+data_cap:   .space 1                // max capacity for data words
+ecwb_cap:   .space 1                // error correction words per block
+g1b_cap:    .space 1                // number of blocks in group 1
+g1bw_cap:   .space 1                // data words in each group 1 block
+
 count_ind:  .space 1                // character count indicator byte
-payload:    .space 80               // max possible payload length (v4-L)
+
+payload:    .space MAX_DATA_CAP     // payload of message and config
+// TODO: qrmat
 
             // Lookup Tables
 tbl_eclvl:                          // error correction level lookup
@@ -49,7 +54,7 @@ tbl_version: //   L, M, Q, H        // version lookup
             .byte 78, 62, 46, 34    // v4
 
 tbl_ecprops:                        // error correction config lookup
-            //    0: capacity in bytes
+            //    0: data capacity in bytes
             //    1: error correction words per block
             //    2: blocks in group 1
             //    3: data words in each group 1 block
@@ -137,21 +142,21 @@ set_ec_props:                       // ***** set error correction properties ***
             strb r0, [r1]           // save error correction properties index
             ldr  r1, =tbl_ecprops   // pointer to error correction properties
             ldrb r2, [r1, r0]       // load data word capacity from EC properties
-            ldr  r3, =capacity      // pointer to data word capacity
+            ldr  r3, =data_cap      // pointer to data word capacity
             strb r2, [r3]           // save data word capacity
 
             add  r0, r0, #1         // increment index to ecw per block
-            ldr  r3, =ecw_block     // pointer to ecw_block
+            ldr  r3, =ecwb_cap      // pointer to ecwb_cap
             ldrb r2, [r1, r0]       // load ecw per block from EC properties
             strb r2, [r3]           // save ecw per block
 
             add  r0, r0, #1         // increment index to group 1 blocks
-            ldr  r3, =g1_blocks     // pointer to g1_blocks
+            ldr  r3, =g1b_cap       // pointer to g1b_cap
             ldrb r2, [r1, r0]       // load group 1 blocks from EC properties
             strb r2, [r3]           // save group 1 blocks
 
             add  r0, r0, #1         // increment index to group 1 words per block
-            ldr  r3, =g1b_words     // pointer to g1b_words
+            ldr  r3, =g1bw_cap      // pointer to g1bw_cap
             ldrb r2, [r1, r0]       // load group 1 words per block from EC properties
             strb r2, [r3]           // save group 1 words per block
 
@@ -162,20 +167,20 @@ init_payload:                       // ***** Init QR code payload *****
             ldrb r3, [r2]           // load char count indicator nibble
             lsr  r4, r3, #4         // shift char indicator high nibble to low nibble
             eor  r0, r1, r4         // combine mode nibble with count indicator high nibble
-            
+
             mov  r6, #0             // payload_idx = 0
             ldr  r7, =payload       // pointer to payload
             strb r0, [r7, r6]       // payload[payload_idx] = mode nibble + count_ind[LOW]
-            
+            add  r6, r6, #1         // payload_idx++
+
             ldr  r2, =msg           // pointer to message
             mov  r5, #msg_len       // load msg_len for loop exit
             sub  r5, r5, #1         // msg_len --; null terminator  (TODO: remove ?)
             mov  r8, #0             // msg_idx = 0
 
 inject_msg:                         // ***** Inject message into payload *****
-            add  r6, r6, #1         // payload_idx++
-            eor  r0, r0, r0         // reset scratch register for low nibble
-            eor  r1, r1, r1         // reset scratch register for high nibble
+            eor  r0, r0, r0         // reset scratch register for low nibble   TODO: needed?
+            eor  r1, r1, r1         // reset scratch register for high nibble  TODO: needed?
 
             mov  r1, #0xF           // load bitmask 0b00001111
             and  r1, r3, r1         // mask low nibble out of msg[msg_idx-1]
@@ -187,49 +192,43 @@ inject_msg:                         // ***** Inject message into payload *****
             strb r0, [r7, r6]       // store combined byte at payload[payload_idx]
 
             add  r8, r8, #1         // msg_idx++
+            add  r6, r6, #1         // payload_idx++
             cmp  r8, r5             // compare msg_idx with msg_len
             blt  inject_msg         // while (msg_idx < msg_len)
 
+inject_done:                        // ***** Finish message injection *****
             mov  r1, #0xF           // load bitmask 0b00001111
             and  r1, r3, r1         // mask low nibble out of msg[msg_idx-1]
             lsl  r1, r1, #4         // shift low nibble to high nibble
             strb r1, [r7, r6]       // store last char low nibble and zero nibble padding
+            add  r6, r6, #1         // payload_idx++
 
-            // r0 = r1[lo] + r3[hi]
-
-            nop
-            nop
-            nop
-
-            // TODO: everything after here needs refactoring
-
-            ldr  r4, =payload       // pointer to payload
-            strb r1, [r4]           // payload[0] = BYTE_ZERO
-            add  r3, r3, #1         // i = msg_len + BYTE_ZERO
+            ldr  r2, =data_cap      // pointer to capacity
+            ldrb r0, [r2]           // load max capacity
 
 pad_loop:                           // ***** Pad payload with alternating bytes *****
-            cmp  r3, r0             // compare payload size with max capacity
-            bgt  split_payload      // i > capacity, pad finished
+            cmp  r6, r0             // compare payload size with data capacity
+            bge  split_payload      // msg_idx >= data capacity, pad finished
             mov  r2, #0xEC          // set pad byte
-            strb r2, [r4, r3]       // payload[i] = 0xEC
-            add  r3, r3, #1         // i++
+            strb r2, [r7, r6]       // payload[msg_idx] = 0xEC
+            add  r6, r6, #1         // msg_idx++
 
-            cmp  r3, r0             // compare payload size with max capacity
-            bgt  split_payload      // i > capacity, pad finished
+            cmp  r6, r0             // compare payload size with data capacity
+            bge  split_payload      // msg_idx >= data capacity, pad finished
             mov  r2, #0x11          // set pad byte
-            strb r2, [r4, r3]       // payload[i] = 0x11
-            add  r3, r3, #1         // i++
-            b    pad_loop           // while (i < capacity)
+            strb r2, [r7, r6]       // payload[msg_idx] = 0x11
+            add  r6, r6, #1         // msg_idx++
+            b    pad_loop           // while (msg_idx < capacity)
 
-split_payload:                      // ***** Split payload to blocks and groups *****
-            // TODO: write payload bytes to file for checking!
-            b    tmp_done
-
-tmp_done:                           // TODO: temporary label
-            b    _end               // TODO: skip over errors
+            // hmmm...if we have max capacity recorded, then we can just loop over the
+            //   chunk of memory using the EC config...so we might not need to "split" things
+            
+            nop
+            nop  // TODO: temp
+            nop
+            b    _end
 
             // TODO:
-            //  - Payload split to groups + blocks
             //  - Reed-Solomon error correction
             //    - Galois field lookup and arithmetic
             //    - Polynomial arithmetic

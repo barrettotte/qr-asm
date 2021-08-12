@@ -1,4 +1,6 @@
-// lookup tables and subroutines for GF(256)
+// lookup tables and subroutines for Galois Fields - GF(256)
+            .data
+            .balign 4
 
 gf256_anti: // Galois field 256 anti-logarithm table
             .byte 1, 2, 4, 8, 16, 32, 64, 128             //   0 -   7
