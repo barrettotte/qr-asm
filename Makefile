@@ -7,7 +7,7 @@ OUT = bin
 BIN = qrcode
 SRC := $(patsubst %.s,%.o,$(wildcard *.s))
 
-all:		clean build
+all:		clean build link
 
 rebuild: 	all	
 
@@ -16,6 +16,8 @@ build:		$(SRC)
 
 %.o : %.s
 			$(AS) -g $< -o $@
+			
+link:
 			$(LD) *.o -o $(OUT)/$(BIN)
 
 clean:
