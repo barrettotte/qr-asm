@@ -1,6 +1,5 @@
 // Generate a byte-mode QR Code (v1-4)
             .data
-            .balign 4
 
             // OS Constants
             .equ STDOUT, 0
@@ -208,13 +207,13 @@ inject_done:                        // ***** Finish message injection *****
 
 pad_loop:                           // ***** Pad payload with alternating bytes *****
             cmp  r6, r0             // compare payload size with data capacity
-            bge  split_payload      // msg_idx >= data capacity, pad finished
+            bge  next               // msg_idx >= data capacity, pad finished
             mov  r2, #0xEC          // set pad byte
             strb r2, [r7, r6]       // payload[msg_idx] = 0xEC
             add  r6, r6, #1         // msg_idx++
 
             cmp  r6, r0             // compare payload size with data capacity
-            bge  split_payload      // msg_idx >= data capacity, pad finished
+            bge  next               // msg_idx >= data capacity, pad finished
             mov  r2, #0x11          // set pad byte
             strb r2, [r7, r6]       // payload[msg_idx] = 0x11
             add  r6, r6, #1         // msg_idx++
@@ -222,10 +221,19 @@ pad_loop:                           // ***** Pad payload with alternating bytes 
 
             // hmmm...if we have max capacity recorded, then we can just loop over the
             //   chunk of memory using the EC config...so we might not need to "split" things
-            
+
+next:
             nop
             nop  // TODO: temp
             nop
+            
+            // test subroutine
+            mov  r0, #1
+            mov  r1, #4
+            bl   gf256_add  // r3 = r0 + r1
+            nop
+            nop
+
             b    _end
 
             // TODO:
