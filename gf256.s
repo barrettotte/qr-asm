@@ -1,6 +1,7 @@
-.global gf256_add
+// lookup tables and subroutines for Galois Field arithmetic in GF(256)
 
-// lookup tables and subroutines for Galois Fields - GF(256)
+            .global gf256_add
+
             .data
 
 gf256_anti: // Galois field 256 anti-logarithm table
@@ -37,7 +38,7 @@ gf256_anti: // Galois field 256 anti-logarithm table
             .byte 44, 88, 176, 125, 250, 233, 207, 131    // 240 - 247
             .byte 27, 54, 108, 216, 173, 71, 142, 1       // 248 - 255
 
-gf256_log:
+gf256_log:  // Galois field 256 logarithm table
             .byte -1, 0, 1, 25, 2, 50, 26, 198            //   0 -   7
             .byte 3, 223, 51, 238, 27, 104, 199, 75       //   8 -  15
             .byte 4, 100, 224, 14, 52, 141, 239, 129      //  16 -  23
@@ -71,15 +72,47 @@ gf256_log:
             .byte 79, 174, 213, 233, 230, 231, 173, 232   // 240 - 247
             .byte 116, 214, 244, 234, 168, 80, 88, 175    // 248 - 255              
 
-// GF256_SIZE = 256
-// PRIMITIVE_POLYNOMIAL = 285
-
-// gf256_add
-// gf256_sub
-// gf256_mul
-// gf256_div
-
             .text
-gf256_add:
-            add  r2, r1, r0         //  
-            bx   lr                 // return
+
+gf256_mul:                          // ***** multiplication in GF(256) *****
+                                    // r0 - unused
+                                    // r1 - unused
+                                    // r2 - unused
+                                    // r3 - unused
+            push {r4-r11,r14}       // save caller's vars + return address
+            
+            nop
+            // TODO: if r2 == 0 || r3 == 0 then r0 = 0
+            // TODO: else r0 = gf256_anti[gf256_log[r2] + gf256_log[r3]] % 255
+
+            pop  {r4-r11,r14}       // restore caller's vars + return address
+            bx   lr                 // return from subroutine
+
+gf256_inv:                          // ***** inverse in GF(256) *****
+                                    // r0 - unused
+                                    // r1 - unused
+                                    // r2 - unused
+                                    // r3 - unused
+            push {r4-r11,r14}       // save caller's vars + return address
+            
+            nop
+            // TODO: if r2 == 0 raise exception zero has no inverse
+            // TODO: else r0 = gf256_anti[255 - gf256_log[r2]]
+
+            pop  {r4-r11,r14}       // restore caller's vars + return address
+            bx   lr                 // return from subroutine
+
+gf256_div:                          // ***** division in GF(256) *****
+                                    // r0 - unused
+                                    // r1 - unused
+                                    // r2 - unused
+                                    // r3 - unused
+            push {r4-r11,r14}       // save caller's vars + return address
+            
+            nop
+            // TODO: if a == 0 then r0 = 0
+            // TODO: elif b == 0 then rasie exception div by zero
+            // TODO: else gf256_mul (r2, gf256_inv(r3))
+
+            pop  {r4-r11,r14}       // restore caller's vars + return address
+            bx   lr                 // return from subroutine

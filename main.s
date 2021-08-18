@@ -1,4 +1,5 @@
 // Generate a byte-mode QR Code (v1-4)
+
             .data
 
             // OS Constants
@@ -14,7 +15,9 @@
             // Program Constants
             .equ MAX_VERSION, 3     // max version supported (1-4)
             .equ MODE, 0b0100       // byte encoding mode (nibble)
+
             .equ MAX_DATA_CAP, 80   // max data capacity (v4-L)
+            .equ MAX_ECWB, 28       // max ECW per block (v2-H)
 
             // Error Messages
 err_01:     .asciz "Invalid error correction level.\n"
@@ -27,7 +30,7 @@ err_02:     .asciz "Only QR versions 1-4 are supported.\n"
 msg:        .asciz "https://github.com/barrettotte"
             .equ msg_len, (.-msg)   // (30 chars) TODO: from cmd line args
 
-version:    .space 1                // QR version
+version:    .space 1                // QR code version
 eclvl_idx:  .space 1                // error correction level index (L,M,Q,H)
 eclvl:      .space 1                // error correction level value (1,0,3,2)
 ecprop_idx: .space 1                // error correction properties index
@@ -38,9 +41,9 @@ g1b_cap:    .space 1                // number of blocks in group 1
 g1bw_cap:   .space 1                // data words in each group 1 block
 
 count_ind:  .space 1                // character count indicator byte
-
 payload:    .space MAX_DATA_CAP     // payload of message and config
-// TODO: qrmat
+mpoly:      .space MAX_DATA_CAP     // message polynomial
+gpoly:      .space MAX_ECWB+1       // generator polynomial
 
             // Lookup Tables
 tbl_eclvl:                          // error correction level lookup
@@ -74,19 +77,22 @@ tbl_ecprops:                        // error correction config lookup
             .byte 48, 26, 2, 24     // 14: v4-Q
             .byte 36, 16, 4, 9      // 15: v4-H
 
+tbl_rem:    .byte 0, 7, 7, 7        // remainder lookup (v1-4)
+
             .text
             .global _start
+
 _start:                             // ***** program entry point *****
             mov  r0, #0             // i = 0
             mov  r1, #msg_len       // length;  TODO: get from command line args
             ldr  r2, =msg           // pointer; TODO: get from command line args
-/*
+
 msg_loop:                           // ***** loop over message (debug) *****
-            ldrb r3, [r2, r0]       // msg[i]
+            ldrb r3, [r2, r0]       // r3 = msg[i]
             add  r0, r0, #1         // i++
-            cmp  r0, r1             // compare registers
-            ble  msg_loop           // i <= msg_len
-*/
+            cmp  r0, r1             // compare index to message length
+            blt  msg_loop           // i < msg_len
+
 save_args:                          // ***** save command line arguments to memory *****
             mov  r0, #2             // TODO: get from command line args  offset 2=Q
             ldr  r1, =eclvl_idx     // pointer to error correction index
@@ -115,7 +121,7 @@ find_version:                       // ***** find QR version *****
             strb r3, [r4]           // save msg_len-1 as char count indicator byte
             mov  r4, #MAX_VERSION   // load max QR version supported
 
-version_loop:                       // ***** Search version lookup table *****
+version_loop:                       // ***** search version lookup table *****
             ldrb r5, [r2, r1]       // msg capacity = tbl_version[(i * 4) + eclvl]
             cmp  r5, r3             // compare msg capacity to msg_len
             bgt  set_version        // if (msg capacity > msg_len)
@@ -159,7 +165,7 @@ set_ec_props:                       // ***** set error correction properties ***
             ldrb r2, [r1, r0]       // load group 1 words per block from EC properties
             strb r2, [r3]           // save group 1 words per block
 
-init_payload:                       // ***** Init QR code payload *****
+init_payload:                       // ***** init QR code payload *****
             mov  r1, #MODE          // load mode nibble
             lsl  r1, r1, #4         // shift nibble from low to high
             ldr  r2, =count_ind     // pointer to char count indicator
@@ -177,7 +183,7 @@ init_payload:                       // ***** Init QR code payload *****
             sub  r5, r5, #1         // msg_len --; null terminator  (TODO: remove ?)
             mov  r8, #0             // msg_idx = 0
 
-inject_msg:                         // ***** Inject message into payload *****
+inject_msg:                         // ***** inject message into payload *****
             eor  r0, r0, r0         // reset scratch register for low nibble   TODO: needed?
             eor  r1, r1, r1         // reset scratch register for high nibble  TODO: needed?
 
@@ -195,7 +201,7 @@ inject_msg:                         // ***** Inject message into payload *****
             cmp  r8, r5             // compare msg_idx with msg_len
             blt  inject_msg         // while (msg_idx < msg_len)
 
-inject_done:                        // ***** Finish message injection *****
+inject_done:                        // ***** finish message injection *****
             mov  r1, #0xF           // load bitmask 0b00001111
             and  r1, r3, r1         // mask low nibble out of msg[msg_idx-1]
             lsl  r1, r1, #4         // shift low nibble to high nibble
@@ -205,61 +211,52 @@ inject_done:                        // ***** Finish message injection *****
             ldr  r2, =data_cap      // pointer to capacity
             ldrb r0, [r2]           // load max capacity
 
-pad_loop:                           // ***** Pad payload with alternating bytes *****
+pad_loop:                           // ***** pad payload with alternating bytes *****
             cmp  r6, r0             // compare payload size with data capacity
-            bge  next               // msg_idx >= data capacity, pad finished
+            bge  reed_sol           // msg_idx >= data capacity, pad finished
             mov  r2, #0xEC          // set pad byte
             strb r2, [r7, r6]       // payload[msg_idx] = 0xEC
             add  r6, r6, #1         // msg_idx++
 
             cmp  r6, r0             // compare payload size with data capacity
-            bge  next               // msg_idx >= data capacity, pad finished
+            bge  reed_sol           // msg_idx >= data capacity, pad finished
             mov  r2, #0x11          // set pad byte
             strb r2, [r7, r6]       // payload[msg_idx] = 0x11
             add  r6, r6, #1         // msg_idx++
             b    pad_loop           // while (msg_idx < capacity)
 
-            // hmmm...if we have max capacity recorded, then we can just loop over the
-            //   chunk of memory using the EC config...so we might not need to "split" things
+reed_sol:                           // ***** Reed-Solomon error correction *****
+            mov  r4, #0             // i = 0
+            ldr  r5, =g1b_cap       // pointer to group 1 blocks capacity (3Q = 2)
+            ldrb r5, [r5]           // load g1b_cap
 
-next:
-            nop
-            nop  // TODO: temp
-            nop
-            
-            // test subroutine
-            mov  r0, #1
-            mov  r1, #4
-            bl   gf256_add  // r3 = r0 + r1
-            nop
-            nop
+            // ---begin loop over g1b_cap ... while(i < g1b_cap)
 
+            ldr  r0, =mpoly         // pointer to message polynomial
+            mov  r1, #0             // clear unused argument
+            ldr  r2, =payload       // pointer to payload
+            ldr  r3, =g1bw_cap      // pointer to block data word size (3Q = 17)
+            ldrb r3, [r3]           // load block data word size
+            bl   get_mpoly          // call subroutine to build message polynomial
+
+            // get_gpoly
+
+            // xpoly : scratch polynomial
+            // rpoly : remainder polynomial
+
+            // xpoly = poly_mul(mpoly, 1x^(msg_len))
+            // rpoly = poly_remainder(mpoly, gpoly)
+
+            // ---end loop over g1b_cap
+
+
+            // TODO: interleave payload data and error correction data  (3Q - 70 words)
+            // TODO: add remainder bits (7 remainder bits)
+
+            nop
+            nop
+            nop
             b    _end
-
-            // TODO:
-            //  - Reed-Solomon error correction
-            //    - Galois field lookup and arithmetic
-            //    - Polynomial arithmetic
-            //    - Generator polynomial
-            //  - Interleave data and error correction data
-            //  - Remainder bits
-            //  - Create/write image file with QR matrix data
-            //  - QR matrix init
-            //    - leave quiet zone untouched
-            //    - reserved areas
-            //    - timing patterns
-            //    - finders
-            //    - alignment pattern and dark module
-            //  - Zigzag QR data
-            //  - Mask QR - hardcoded to ?
-            //  - Format bits calculation
-            //  - Format bits placement adjacent to finders
-            // 
-            //  Import files:
-            //    - galois.s
-            //    - polynomial.s
-            //    - reed-solomon.s ?
-            //
 bad_eclvl:                          // ***** invalid error correction level *****
             mov  r7, #WRITE         // syscall number
             mov  r0, #STDOUT        // file descriptor

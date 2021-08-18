@@ -32,6 +32,7 @@ I'm still new to GDB, but this worked for me.
 
 ## References
 
+- [ARM A32 Calling Convention](https://en.wikipedia.org/wiki/Calling_convention#ARM_(A32))
 - [ARM 32-bit EABI Syscall Reference](https://chromium.googlesource.com/chromiumos/docs/+/master/constants/syscalls.md#arm-32_bit_EABI)
 - [GNU ARM Assembler Quick Reference](https://www.ic.unicamp.br/~celio/mc404-2014/docs/gnu-arm-directives.pdf)
 - [QR Code Design Wiki](https://en.wikipedia.org/wiki/QR_code#Design)
