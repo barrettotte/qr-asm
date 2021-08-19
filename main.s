@@ -1,23 +1,10 @@
 // Generate a byte-mode QR Code (v1-4)
 
+            .include "const.inc"
+
+            .global _start
+
             .data
-
-            // OS Constants
-            .equ STDOUT, 0
-
-            .equ EXIT,   1
-            .equ READ,   3
-            .equ WRITE,  4
-            .equ OPEN,   5
-            .equ CLOSE,  6
-            .equ CREATE, 8
-
-            // Program Constants
-            .equ MAX_VERSION, 3     // max version supported (1-4)
-            .equ MODE, 0b0100       // byte encoding mode (nibble)
-
-            .equ MAX_DATA_CAP, 80   // max data capacity (v4-L)
-            .equ MAX_ECWB, 28       // max ECW per block (v2-H)
 
             // Error Messages
 err_01:     .asciz "Invalid error correction level.\n"
@@ -80,18 +67,11 @@ tbl_ecprops:                        // error correction config lookup
 tbl_rem:    .byte 0, 7, 7, 7        // remainder lookup (v1-4)
 
             .text
-            .global _start
 
 _start:                             // ***** program entry point *****
             mov  r0, #0             // i = 0
             mov  r1, #msg_len       // length;  TODO: get from command line args
             ldr  r2, =msg           // pointer; TODO: get from command line args
-
-msg_loop:                           // ***** loop over message (debug) *****
-            ldrb r3, [r2, r0]       // r3 = msg[i]
-            add  r0, r0, #1         // i++
-            cmp  r0, r1             // compare index to message length
-            blt  msg_loop           // i < msg_len
 
 save_args:                          // ***** save command line arguments to memory *****
             mov  r0, #2             // TODO: get from command line args  offset 2=Q
@@ -230,6 +210,7 @@ reed_sol:                           // ***** Reed-Solomon error correction *****
             ldr  r5, =g1b_cap       // pointer to group 1 blocks capacity (3Q = 2)
             ldrb r5, [r5]           // load g1b_cap
 
+            // TODO: do i need a chunk of memory for blocks?  blocks: .space MAX_DATA_CAP
             // ---begin loop over g1b_cap ... while(i < g1b_cap)
 
             ldr  r0, =mpoly         // pointer to message polynomial
@@ -239,7 +220,12 @@ reed_sol:                           // ***** Reed-Solomon error correction *****
             ldrb r3, [r3]           // load block data word size
             bl   get_mpoly          // call subroutine to build message polynomial
 
-            // get_gpoly
+            ldr  r0, =gpoly         // pointer to generator polynomial
+            mov  r1, #0             // clear unused argument
+            mov  r2, #0             // clear unused argument
+            ldr  r3, =ecwb_cap      // pointer to ECW capacity
+            ldrb r3, [r3]           // load error correction word capacity
+            bl   get_gpoly          // call subroutine to build generator polynomial
 
             // xpoly : scratch polynomial
             // rpoly : remainder polynomial

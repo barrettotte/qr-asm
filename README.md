@@ -30,6 +30,13 @@ I'm still new to GDB, but this worked for me.
 - `make && make debug`
 - `arm-none-eabi-gdb -ex 'file bin/qrcode' -ex 'target remote localhost:1234' -ex 'layout regs'`
 
+### Debugging My 3Q Test
+
+Useful GDB commands for my `3Q` test on payload `https://github.com/barrettotte`
+
+- `x/30ub &msg`
+- `x/34ub &payload`
+
 ## References
 
 - [ARM A32 Calling Convention](https://en.wikipedia.org/wiki/Calling_convention#ARM_(A32))
@@ -38,3 +45,4 @@ I'm still new to GDB, but this worked for me.
 - [QR Code Design Wiki](https://en.wikipedia.org/wiki/QR_code#Design)
 - [QR Code Tutorial](https://www.thonky.com/qr-code-tutorial/)
 - [Reed Solomon Codes for Coders](https://en.wikiversity.org/wiki/Reed%E2%80%93Solomon_codes_for_coders)
+- [GDB Command Reference](https://visualgdb.com/gdbreference/commands/x)
