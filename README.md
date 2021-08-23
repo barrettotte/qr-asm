@@ -30,13 +30,7 @@ I'm still new to GDB, but this worked for me.
 - `make && make debug`
 - `arm-none-eabi-gdb -ex 'file bin/qrcode' -ex 'target remote localhost:1234' -ex 'layout regs'`
 
-### Debugging My 3Q Test
-
-Useful GDB commands for my `3Q` test on payload `https://github.com/barrettotte`
-
-- `x/30ub &msg`
-- `x/34ub &payload`
-- `x/18ub &mpoly`
+For sanity checking this ugly thing, see my notes in [docs/3Q-test.md](docs/3Q-test.md)
 
 ## References
 

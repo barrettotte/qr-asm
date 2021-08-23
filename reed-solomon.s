@@ -7,6 +7,7 @@
             .global gf256_inv
             .global gf256_div
             .global new_mono
+            .global poly_add
             .global poly_mul
             .global new_mpoly
             .global new_gpoly
@@ -82,178 +83,305 @@ gf256_log:  // Galois field 256 logarithm table
             .byte 116, 214, 244, 234, 168, 80, 88, 175    // 248 - 255
 
                                         // polynomials = [degree byte, term bytes]
-gtmp_poly:  .space MAX_DATA_CAP+1       // scratch polynomial for generator polynomial create
+gtmpA_poly: .space MAX_DATA_CAP+1       // scratch polynomial for generator polynomial create
+gtmpB_poly: .space MAX_DATA_CAP+1       // scratch polynomial for generator polynomial create
+sum_poly:   .space (MAX_DATA_CAP+1)     // scratch polynomial for polynomial addition
 prd_poly:   .space (MAX_DATA_CAP+1)*2   // scratch polynomial for polynomial multiplication
 prd_mono:   .space (MAX_DATA_CAP+1)*2   // scratch monomial for polynomial multiplication
 
             .text
 
-gf256_mul:                             // ***** multiplication in GF(256) *****
-                                       // r0 - unused
-                                       // r1 - unused
-                                       // r2 - unused
-                                       // r3 - unused
-            push {r4-r11,r14}          // save caller's vars + return address
-            
-            nop
-            // TODO: if r2 == 0 || r3 == 0 then r0 = 0
-            // TODO: else r0 = gf256_anti[gf256_log[r2] + gf256_log[r3]] % 255
+gf256_mul:                              // ***** multiplication in GF(256) *****
+                                        // r0 - product
+                                        // r1 - unused
+                                        // r2 - operand A
+                                        // r3 - operand B
+            push  {r4-r11, lr}          // save caller's vars + return address
 
-            pop  {r4-r11,r14}          // restore caller's vars + return address
-            bx   lr                    // return from subroutine
+            mov   r0, #0                // init product
+            and   r4, r2, r3            // if either A or B are zero, then r4 = 0
+            cmp   r4, r0                // check if r4 = 0
+            beq   _gf256m_done          // leave routine; 0 * n = 0
 
-gf256_inv:                             // ***** inverse in GF(256) *****
-                                       // r0 - unused
-                                       // r1 - error if non-zero
-                                       // r2 - unused
-                                       // r3 - unused
-            push {r4-r11,r14}          // save caller's vars + return address
-            mov  r1, #0                // init error
+            ldr   r4, =gf256_log        // pointer to logarithm table
+            ldr   r5, =gf256_anti       // pointer to anti-logarithm table
+            ldrb  r6, [r4, r2]          // gf256_log[r2]
+            ldrb  r7, [r4, r3]          // gf256_log[r3]
+            add   r6, r6, r7            // gf256_log[r2] + gf256_log[r3]; modulo operand A
+            //ldrb  r6, [r5, r6]          // r6 = gf256_anti[r6]; 
+
+            mov   r7, #255              // load modulo operand B
+            udiv  r8, r6, r7            // (a / b)
+            umull r10, r9, r8, r7       // (a / b) * b  (throw away r10 = rdhi)
+            sub   r8, r6, r9            // a - ((a / b) * b)
+
+            ldrb  r0, [r5, r8]          // gf256_anti[r6 % 255]
+
+_gf256m_done:                           // leave subroutine
+            pop   {r4-r11, lr}          // restore caller's vars + return address
+            bx    lr                    // return from subroutine
+
+gf256_inv:                              // ***** inverse in GF(256) *****
+                                        // r0 - unused
+                                        // r1 - error if non-zero
+                                        // r2 - unused
+                                        // r3 - unused
+            push  {r4-r11, lr}          // save caller's vars + return address
+            mov   r1, #0                // init error
 
             // TODO: if r2 == 0 raise exception zero has no inverse
             // TODO: else r0 = gf256_anti[255 - gf256_log[r2]]
 
-            pop  {r4-r11,r14}          // restore caller's vars + return address
-            bx   lr                    // return from subroutine
+            pop   {r4-r11, lr}          // restore caller's vars + return address
+            bx    lr                    // return from subroutine
 
-gf256_div:                             // ***** division in GF(256) *****
-                                       // r0 - unused
-                                       // r1 - error if non-zero
-                                       // r2 - unused
-                                       // r3 - unused
-            push {r4-r11,r14}          // save caller's vars + return address
-            mov  r1, #0                // init error
+gf256_div:                              // ***** division in GF(256) *****
+                                        // r0 - unused
+                                        // r1 - error if non-zero
+                                        // r2 - unused
+                                        // r3 - unused
+            push  {r4-r11, lr}          // save caller's vars + return address
+            mov   r1, #0                // init error
 
             // TODO: if a == 0 then r0 = 0
             // TODO: elif b == 0 then raise exception div by zero
             // TODO: else gf256_mul (r2, gf256_inv(r3))
 
-            pop  {r4-r11,r14}          // restore caller's vars + return address
-            bx   lr                    // return from subroutine
+            pop   {r4-r11, lr}          // restore caller's vars + return address
+            bx    lr                    // return from subroutine
 
-new_mono:                              // ***** create new monomial *****
-                                       // r0 - pointer to store new monomial
-                                       // r1 - unused
-                                       // r2 - degree
-                                       // r3 - unused
-            push {r4-r11,r14}          // save caller's vars + return address
+new_mono:                               // ***** create new monomial *****
+                                        // r0 - pointer to store new monomial
+                                        // r1 - unused
+                                        // r2 - degree
+                                        // r3 - term coefficient
+            push  {r4-r11, lr}          // save caller's vars + return address
 
-            mov  r4, #1                // i = 1
-            strb r2, [r0]              // mono[0] = degree
-            strb r4, [r0, r2]          // mono[degree] = 1
-_mono_loop:                            // clear out rest of monomial terms
-            strb r1, [r0, r1]          // mono[i] = 0
-            add  r4, r4, #1            // i++
-            cmp  r4, r2                // compare idx with monomial degree
-            blt  _mono_loop            // while (i < degree)
+            mov   r4, #1                // i = 1
+            mov   r5, #0                //
+_mono_loop:                             // clear out monomial terms
+            strb  r5, [r0, r4]          // mono[i] = 0
+            add   r4, r4, #1            // i++
+            cmp   r4, r2                // compare idx with monomial degree
+            ble   _mono_loop            // while (i < degree)
 
-            pop  {r4-r11,r14}          // restore caller's vars + return address
-            bx   lr                    // return from subroutine       
+            strb  r2, [r0]              // mono[0] = degree
+            add   r2, r2, #1            // polynomial one-indexing
+            strb  r3, [r0, r2]          // mono[degree+1] = r3
 
-poly_mul:                              // ***** polynomial multiplication *****
-                                       // r0 - pointer to product polynomial
-                                       // r1 - unused
-                                       // r2 - pointer to operand A polynomial
-                                       // r3 - pointer to operand B polynomial
-            push {r4-r11,r14}          // save caller's vars + return address
+            pop   {r4-r11, lr}          // restore caller's vars + return address
+            bx    lr                    // return from subroutine       
 
-            ldr  r4, =prd_poly         // pointer to prd_poly
-            ldrb r5, [r2]              // load operand A degree
-            ldrb r6, [r3]              // load operand B degree
-            add  r5, r5, r6            // get size of polynomial product
-            strb r5, [r4]              // prd_poly[0] = degree
-            push {r0}                  // store product polynomial pointer for later
+poly_norm:                              // ***** polynomial normalization *****
+                                        // r0 - pointer to normalized polynomial
+                                        // r1 - unused
+                                        // r2 - pointer to polynomial to normalize
+                                        // r3 - unused
+            push  {r4-r11, lr}          // save caller's vars + return address
 
-            mov  r6, #1                // i = 1
-_pmul_a:                               // loop over all operand A terms
-            mov  r7, #1                // j = 1
-_pmul_b:                               // loop over all operand B terms
-            ldrb r8, [r2, r6]          // r8 = A[i]
-            ldrb r9, [r3, r7]          // r9 = B[j]
+            nop   // TODO:  max_nz = r0.degree - 1
 
-            orr  r10, r8, r9           // OR each term, looking for nonzero for both
-            cmp  r10, #0               // compare with zero
-            beq  _pmul_iter            // if a[i] == b[i] == 0 then skip iteration
+            nop   // TODO:  i = r0.degree + 1 (?)
+            nop   // TODO:  while (i > 0):
+            nop   // TODO:    if r0[i] != 0
+            nop   // TODO:      break
+            nop   // TODO:    max_nz = i - 1
+            nop   // TODO:    i--
 
-            push {r2, lr}              // save operand A pointer and link register
-
-            add  r2, r6, r7           // monomial degree = i + j
-            bl   new_mono             // call subroutine to create new monomial
-
-            nop  // TODO: prd_mono = [(i+j), gf256_mul(a[i], b[j])]
-            nop  // TODO: prd_poly = poly_add(prd_pol, prd_mono)
-
-            pop  {r2, lr}             // restore operand A pointer and link register
-
-_pmul_iter:                            // iterate to next B term
-            add  r7, r7, #1            // j++
-            ble  _pmul_b               // while (j <= degree(B))
-            add  r6, r6, #1            // i++
-            ble  _pmul_a               // while (i <= degree(A))
-
-            nop // TODO: prd_poly = poly_normalize(prd_poly)
+            nop   // TODO:  if max_nz < 0:
+            nop   // TODO:    return monomial 0x^0
+            nop   // TODO:  elif max_nz < (r0.degree - 1)
+            nop   // TODO:    r0
             
-            pop  {r0}                  // restore product polynomial pointer
-            nop // TODO: copy prd_poly terms to polynomial in r0
+            nop   // TODO:  return r0
 
-            pop  {r4-r11,r14}          // restore caller's vars + return address
-            bx   lr                    // return from subroutine
+            pop   {r4-r11, lr}          // restore caller's vars + return address
+            bx    lr                    // return from subroutine   
 
-new_gpoly:                             // ***** create generator polynomial *****
-                                       // r0 - pointer to store generator polynomial
-                                       // r1 - unused
-                                       // r2 - ECW per block = polynomial degree
-                                       // r3 - unused
-            push {r4-r11,r14}          // save caller's vars + return address
+poly_add:                               // ***** polynomial addition *****
+                                        // r0 - pointer to store sum polynomial
+                                        // r1 - unused
+                                        // r2 - pointer to operand A polynomial
+                                        // r3 - pointer to operand B polynomial
+            push  {r4-r11, lr}          // save caller's vars + return address
 
-            strb r2, [r0]              // g_poly[0] = degree
-            mov  r4, #1                // i = 1
-            strb r4, [r0, #1]          // g_poly[1] = r4; g_poly = 1x^0
-            add  r4, r4, #1            // i++
+            ldrb  r5, [r2]              // load degree of A
+            ldrb  r6, [r3]              // load degree of B
+            mov   r7, r5                // set sum polynomial degree to degree of A
+            cmp   r6, r5                // compare degree of B to degree of A
+            ble   _padd_deg             // if (B.degree <= A.degree)
 
-            ldr  r5, =gtmp_poly        // pointer to gtmp_poly
-            ldr  r7, =gf256_anti       // pointer to gf256_anti table
+_padd_degB:                             // else
+            mov   r7, r6                // set temp polynomial degree to degree of B
+_padd_deg:                              // done setting sum polynomial degree
+            strb  r7, [r0]              // store sum polynomial degree
+            add   r5, r5, #1            // r5 = terms in polynomial A
+            add   r6, r6, #1            // r6 = terms in polynomial B
 
-_gpoly_loop:                           // build generator polynomial
-            mov  r6, #2                // load gtmp_poly degree
-            strb r6, [r5]              // gtmp_poly[0] = 2
-            mov  r6, #1                // load first term
-            strb r6, [r5, #1]          // gtmp_poly[1] = 1x^0
-            ldrb r6, [r7, r4]          // load second term
-            strb r6, [r5, #2]          // gtmp_poly[2] = (gf256_anti[i])x^1
+            mov   r8, #0                // i = 0
+_padd_loop:                             // while (i <= degree)
+            add   r10, r8, #1           // one-indexing for polynomials
 
-            push {r2, lr}              // stash ECW per block and link register
-            nop                        // r0; pointer to g_poly; polynomial product
-            mov  r2, r0                // pointer to g_poly; operand A
-            mov  r3, r5                // pointer to gtmp_poly; operand B
-            bl   poly_mul              // call subroutine for polynomial multiplication
-            pop  {r2, lr}              // restore ECW per block and link register
+            cmp   r5, r8                // compare A.terms with index
+            bgt   _padd_a               // if (A.terms > i)
+_padd_b:                                // use B[i] as sum polynomial term
+            ldrb  r9, [r3, r10]         // sum[i] = B[i+1]
+            b     _padd_next            // next iteration
+_padd_a:                                // use A[i] as sum polynomial term
+            cmp   r6, r8                // compare B.terms with index
+            bgt   _padd_gf              // if (A.terms > i && B.terms > i)
+            ldrb  r9, [r2, r10]         // sum[i] = A[i+1]
+            b     _padd_next            // go to next iteration of loop
+_padd_gf:                               // use GF(256) addition
+            ldrb  r9, [r2, r10]         // r9 = A[i+1]
+            ldrb  r10, [r3, r10]        // r10 = B[i+1]
+            eors  r9, r9, r10           // sum[i] = A[i+1] XOR B[i+1]; GF(256) addition
+            b     _padd_next            // go to next iteration of loop
 
-            add  r4, r4, #1            // i++
-            cmp  r4, r2                // compare i and polynomial degree
-            ble  _gpoly_loop           // while (i <= degree)
+_padd_next:                             // set sum polynomial term and iterate
+            add   r8, r8, #1            // i++
+            strb  r9, [r0, r8]          // sum[i] = r9
+            cmp   r8, r7                // compare index to sum polynomial terms
+            ble   _padd_loop            // while (i < sum_poly.terms)
 
-            pop  {r4-r11,r14}          // restore caller's vars + return address
-            bx   lr                    // return from subroutine
+            nop   // TODO: normalization
 
-new_mpoly:                             // ***** create message polynomial *****
-                                       // r0 - pointer to store message polynomial
-                                       // r1 - unused
-                                       // r2 - pointer to message
-                                       // r3 - message length = polynomial degree
-            push {r4-r11,r14}          // save caller's vars + return address
+            pop   {r4-r11, lr}          // restore caller's vars + return address
+            bx    lr                    // return from subroutine
 
-            strb r3, [r0]              // m_poly[0] = degree
-            mov  r4, r3                // i = msg_len
-            sub  r4, r4, #1            // i-- (zero index)
-            mov  r5, #1                // j = 1 ; m_poly idx
-_mpoly_loop:                           // loop over message
-            ldrb r6, [r2, r4]          // r5 = msg[i]
-            strb r6, [r0, r5]          // m_poly[j] = msg[i]
-            sub  r4, r4, #1            // i--
-            add  r5, r5, #1            // j++
-            cmp  r5, r3                // compare m_poly index with message length
-            ble  _mpoly_loop           // while (j <= msg_len)
+poly_mul:                               // ***** polynomial multiplication *****
+                                        // r0 - pointer to product polynomial
+                                        // r1 - clobbered
+                                        // r2 - pointer to operand A polynomial
+                                        // r3 - pointer to operand B polynomial
+            push  {r4-r11, lr}          // save caller's vars + return address
 
-            pop  {r4-r11,r14}          // restore caller's vars + return address
-            bx   lr                    // return from subroutine
+            ldr   r1, =prd_poly         // pointer to product polynomial
+            ldrb  r4, [r2]              // load operand A degree
+            ldrb  r5, [r3]              // load operand B degree
+
+            // TODO: I think I need to store degree AND terms in polynomial data structure...
+
+            add   r10, r5, r4           // get size of polynomial product
+            add   r1, r1, #2            // degree = (A.degree + 1 + B.degree + 1)
+            strb  r10, [r1]             // product[0] = degree
+
+            push  {r0}                  // save product polynomial pointer for later
+            mov   r6, #1                // i = 1
+_pmul_a:                                // loop over all operand A terms
+            mov   r7, #1                // j = 1
+_pmul_b:                                // loop over all operand B terms
+            ldrb  r8, [r2, r6]          // r8 = A[i]
+            ldrb  r9, [r3, r7]          // r9 = B[j]
+
+            orr   r10, r8, r9           // OR each term, looking for nonzero for both
+            cmp   r10, #0               // compare with zero
+            beq   _pmul_next            // if A[i] == B[i] == 0 then skip iteration
+            
+            push  {r2, r3}              // save operand pointers
+            mov   r2, r8                // pass A[i] as operand A
+            mov   r3, r9                // pass B[j] as operand B
+            bl    gf256_mul             // GF(256) multiplication; r0 = r2 * r3
+            
+            mov   r3, r0                // GF(256) product is a term coefficient
+            ldr   r0, =prd_mono         // pass pointer to temp monomial
+            add   r2, r6, r7            // monomial degree = i + j
+            sub   r2, r2, #1            // re-establish index (i-1)+(j-1)+1
+            bl    new_mono              // call subroutine to create temp monomial
+
+            mov   r3, r0                // operand B = temp monomial (prd_mono)
+            mov   r0, r1                // product = temp polynomial
+            mov   r2, r1                // operand A = temp polynomial
+            bl    poly_add              // call subroutine to perform polynomial addition
+            pop   {r2, r3}              // restore operand pointers
+
+_pmul_next:                             // iterate to next B term
+            add   r7, r7, #1            // j++
+            cmp   r7, r5                // compare index with B.degree
+            ble   _pmul_b               // while (j <= B.degree)
+
+            add   r6, r6, #1            // i++
+            cmp   r6, r4                // compare index with A degree
+            ble   _pmul_a               // while (i <= A.degree)
+
+            nop   // TODO: normalization?
+
+            pop   {r0}                  // restore product polynomial pointer
+            mov   r6, #0                // i = 0
+            ldrb  r7, [r1]              // product polynomial degree
+            add   r7, r7, #1            // degree + number of terms
+_pmul_copy:                             // copying temp polynomial to result
+            ldrb  r8, [r1, r6]          // r8 = temp[i] 
+            strb  r8, [r0, r6]          // product[i] = temp[i]
+            add   r6, r6, #1            // i++
+            cmp   r6, r7                // compare index to temp polynomial degree
+            ble   _pmul_copy            // while (i < temp.degree)
+
+            pop   {r4-r11, lr}          // restore caller's vars + return address
+            bx    lr                    // return from subroutine
+
+new_gpoly:                              // ***** create generator polynomial *****
+                                        // r0 - pointer to store generator polynomial
+                                        // r1 - unused
+                                        // r2 - ECW per block = polynomial degree
+                                        // r3 - unused
+            push  {r4-r11, lr}          // save caller's vars + return address
+
+            mov   r4, #1                // init g_poly to 1x^0
+            strb  r4, [r0, #1]          // g_poly[1] = 1
+            mov   r8, #0                // i = 0
+            strb  r8, [r0]              // init generator polynomial degree to zero
+
+            ldr   r10, =gtmpA_poly      // pointer to scratch polynomial A
+            ldr   r5, =gtmpB_poly       // pointer to scratch polynomial B
+            ldr   r7, =gf256_anti       // pointer to gf256_anti table
+            mov   r9, r2                // retain ECW per block
+
+_gpoly_loop:                            // build generator polynomial
+            mov   r6, #1                // load gtmp_poly degree
+            strb  r6, [r5]              // gtmpB_poly[0] = degree
+            strb  r6, [r5, #1]          // gtmpB_poly[1] = 1x^0
+            ldrb  r6, [r7, r8]          // load second term
+            strb  r6, [r5, #2]          // gtmpB_poly[2] = (gf256_anti[i])x^1
+            
+            mov   r6, #0                // j = 0
+_gpoly_copy:                            // copy current generator polynomial to scratch poly A
+            ldrb  r4, [r0, r6]          // r4 = g_poly[j]
+            strb  r4, [r10, r6]         // gtmpA_poly[j] = g_poly[j]
+            cmp   r6, r9                // compare index and ECW per block
+            add   r6, r6, #1            // j++
+            blt   _gpoly_copy           // while (j < g_poly.degree + 1)
+_gpoly_iter:
+            nop                         // r0; pointer to generator polynomial
+            mov   r2, r10               // pointer to scratch polynomial A; operand A
+            mov   r3, r5                // pointer to scratch polynomial B; operand B
+            bl    poly_mul              // call subroutine for polynomial multiplication
+
+            add   r8, r8, #1            // i++
+            cmp   r8, r9                // compare i and ECW per block
+            ble   _gpoly_loop           // while (i <= degree)
+
+            pop   {r4-r11, lr}          // restore caller's vars + return address
+            bx    lr                    // return from subroutine
+
+new_mpoly:                              // ***** create message polynomial *****
+                                        // r0 - pointer to store message polynomial
+                                        // r1 - unused
+                                        // r2 - pointer to message
+                                        // r3 - message length = polynomial degree
+            push  {r4-r11, lr}          // save caller's vars + return address
+
+            mov   r4, r3                // i = msg_len
+            sub   r4, r4, #1            // i-- (zero index)
+            strb  r4, [r0]              // m_poly[0] = degree
+            mov   r5, #1                // j = 1 ; m_poly idx
+_mpoly_loop:                            // loop over message
+            ldrb  r6, [r2, r4]          // r5 = msg[i]
+            strb  r6, [r0, r5]          // m_poly[j] = msg[i]
+            sub   r4, r4, #1            // i--
+            add   r5, r5, #1            // j++
+            cmp   r5, r3                // compare m_poly index with message length
+            ble   _mpoly_loop           // while (j <= msg_len)
+
+            pop   {r4-r11, lr}          // restore caller's vars + return address
+            bx    lr                    // return from subroutine
