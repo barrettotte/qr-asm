@@ -165,9 +165,10 @@ _mono_loop:                             // clear out monomial terms
             cmp   r4, r2                // compare idx with monomial degree
             ble   _mono_loop            // while (i < degree)
 
+
             strb  r2, [r0]              // mono[0] = degree
             add   r2, r2, #1            // polynomial one-indexing
-            strb  r3, [r0, r2]          // mono[degree+1] = r3
+            strb  r3, [r0, r2]          // mono[degree] = r3
 
             pop   {r4-r11, lr}          // restore caller's vars + return address
             bx    lr                    // return from subroutine       
@@ -207,42 +208,42 @@ poly_add:                               // ***** polynomial addition *****
 
             ldrb  r5, [r2]              // load degree of A
             ldrb  r6, [r3]              // load degree of B
-            mov   r7, r5                // set sum polynomial degree to degree of A
-            cmp   r6, r5                // compare degree of B to degree of A
-            ble   _padd_deg             // if (B.degree <= A.degree)
-
-_padd_degB:                             // else
-            mov   r7, r6                // set temp polynomial degree to degree of B
-_padd_deg:                              // done setting sum polynomial degree
-            strb  r7, [r0]              // store sum polynomial degree
             add   r5, r5, #1            // r5 = terms in polynomial A
             add   r6, r6, #1            // r6 = terms in polynomial B
-
-            mov   r8, #0                // i = 0
-_padd_loop:                             // while (i <= degree)
-            add   r10, r8, #1           // one-indexing for polynomials
-
+            
+            mov   r7, r5                // set sum polynomial terms to A.terms
+            cmp   r6, r5                // compare terms of B to terms of A
+            ble   _padd_deg             // if (B.terms <= A.terms)
+_padd_degB:                             // else
+            mov   r7, r6                // set sum polynomial terms to B.terms
+_padd_deg:                              // done setting sum polynomial terms
+            sub   r7, r7, #1            // degree = terms - 1
+            strb  r7, [r0]              // store sum polynomial degree
+            add   r7, r7, #1            // r7 = terms in sum polynomial
+            mov   r8, #0                // i = 1
+_padd_loop:                             // while (i <= terms)
+            add   r11, r8, #1           // 
             cmp   r5, r8                // compare A.terms with index
             bgt   _padd_a               // if (A.terms > i)
-_padd_b:                                // use B[i] as sum polynomial term
-            ldrb  r9, [r3, r10]         // sum[i] = B[i+1]
+_padd_b:                                // use B[i+1] as sum polynomial term
+            ldrb  r9, [r3, r11]         // sum[i+1] = B[i+1]
             b     _padd_next            // next iteration
-_padd_a:                                // use A[i] as sum polynomial term
+_padd_a:                                // use A[i+1] as sum polynomial term
             cmp   r6, r8                // compare B.terms with index
             bgt   _padd_gf              // if (A.terms > i && B.terms > i)
-            ldrb  r9, [r2, r10]         // sum[i] = A[i+1]
+            ldrb  r9, [r2, r11]         // sum[i] = A[i+1]
             b     _padd_next            // go to next iteration of loop
 _padd_gf:                               // use GF(256) addition
-            ldrb  r9, [r2, r10]         // r9 = A[i+1]
-            ldrb  r10, [r3, r10]        // r10 = B[i+1]
-            eors  r9, r9, r10           // sum[i] = A[i+1] XOR B[i+1]; GF(256) addition
+            ldrb  r9, [r2, r11]         // r9 = A[i+1]
+            ldrb  r10, [r3, r11]        // r10 = B[i+1]
+            eor   r9, r9, r10           // sum[i] = A[i+1] XOR B[i+1]; GF(256) addition
             b     _padd_next            // go to next iteration of loop
 
 _padd_next:                             // set sum polynomial term and iterate
+            strb  r9, [r0, r11]         // sum[i+1] = r9
             add   r8, r8, #1            // i++
-            strb  r9, [r0, r8]          // sum[i] = r9
             cmp   r8, r7                // compare index to sum polynomial terms
-            ble   _padd_loop            // while (i < sum_poly.terms)
+            blt   _padd_loop            // while (i < sum_poly.terms)
 
             nop   // TODO: normalization
 
@@ -258,12 +259,13 @@ poly_mul:                               // ***** polynomial multiplication *****
 
             ldr   r1, =prd_poly         // pointer to product polynomial
             ldrb  r4, [r2]              // load operand A degree
+            add   r4, r4, #1
             ldrb  r5, [r3]              // load operand B degree
+            add   r5, r5, #1
 
-            // TODO: I think I need to store degree AND terms in polynomial data structure...
-
-            add   r10, r5, r4           // get size of polynomial product
-            add   r1, r1, #2            // degree = (A.degree + 1 + B.degree + 1)
+            @ add   r10, r5, r4           // get size of polynomial product
+            @ add   r10, r10, #2          // degree = (A.degree + 1 + B.degree + 1)
+            mov   r10, #0               // init product degree
             strb  r10, [r1]             // product[0] = degree
 
             push  {r0}                  // save product polynomial pointer for later
@@ -274,9 +276,10 @@ _pmul_b:                                // loop over all operand B terms
             ldrb  r8, [r2, r6]          // r8 = A[i]
             ldrb  r9, [r3, r7]          // r9 = B[j]
 
-            orr   r10, r8, r9           // OR each term, looking for nonzero for both
-            cmp   r10, #0               // compare with zero
-            beq   _pmul_next            // if A[i] == B[i] == 0 then skip iteration
+            cmp   r8, #0                // compare with zero
+            beq   _pmul_next            // if A[i] == 0 then skip iteration
+            cmp   r9, #0                // compare with zero
+            beq   _pmul_next            // if B[i] == 0 then skip iteration
             
             push  {r2, r3}              // save operand pointers
             mov   r2, r8                // pass A[i] as operand A
@@ -286,7 +289,7 @@ _pmul_b:                                // loop over all operand B terms
             mov   r3, r0                // GF(256) product is a term coefficient
             ldr   r0, =prd_mono         // pass pointer to temp monomial
             add   r2, r6, r7            // monomial degree = i + j
-            sub   r2, r2, #1            // re-establish index (i-1)+(j-1)+1
+            sub   r2, r2, #2            // re-establish index (i-1)+(j-1)
             bl    new_mono              // call subroutine to create temp monomial
 
             mov   r3, r0                // operand B = temp monomial (prd_mono)
@@ -337,6 +340,11 @@ new_gpoly:                              // ***** create generator polynomial ***
             ldr   r7, =gf256_anti       // pointer to gf256_anti table
             mov   r9, r2                // retain ECW per block
 
+            nop   // TODO: it looks like gtmpB_poly is in the wrong order
+            nop   // TODO: idx 1: 1x^1 + 1x^0  @ worked here obviously
+            nop   // TODO: idx 2: 1x^1 + 2x^0  @ failed !
+            nop   // TODO: idx 3: 1x^1 + 4x^0
+
 _gpoly_loop:                            // build generator polynomial
             mov   r6, #1                // load gtmp_poly degree
             strb  r6, [r5]              // gtmpB_poly[0] = degree
@@ -348,9 +356,9 @@ _gpoly_loop:                            // build generator polynomial
 _gpoly_copy:                            // copy current generator polynomial to scratch poly A
             ldrb  r4, [r0, r6]          // r4 = g_poly[j]
             strb  r4, [r10, r6]         // gtmpA_poly[j] = g_poly[j]
-            cmp   r6, r9                // compare index and ECW per block
             add   r6, r6, #1            // j++
-            blt   _gpoly_copy           // while (j < g_poly.degree + 1)
+            cmp   r6, r9                // compare index and ECW per block
+            ble   _gpoly_copy           // while (j <= g_poly.degree)
 _gpoly_iter:
             nop                         // r0; pointer to generator polynomial
             mov   r2, r10               // pointer to scratch polynomial A; operand A
