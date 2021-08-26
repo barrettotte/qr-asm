@@ -221,28 +221,20 @@ reed_sol:                               // ***** Reed-Solomon error correction *
             ldrb  r3, [r3]              // load block data word size
             bl    new_mpoly             // call subroutine to create message polynomial
 
-            nop   // TODO: recheck m_poly in GDB
-
             ldr   r0, =g_poly           // pointer to generator polynomial
             ldr   r2, =ecwb_cap         // pointer to ECW capacity
             ldrb  r2, [r2]              // load error correction word capacity
             bl    new_gpoly             // call subroutine to create generator polynomial
-
-            nop   // TODO: check g_poly in GDB
-
-            nop   // xpoly : scratch polynomial
-            nop   // rpoly : remainder polynomial
-
-            nop   // xpoly = poly_mul(mpoly, 1x^(msg_len))
-            nop   // rpoly = poly_remainder(mpoly, gpoly)
 
             nop   // ---end loop over g1b_cap
 
             nop   // TODO: interleave payload data and error correction data  (3Q - 70 words)
             nop   // TODO: add remainder bits (7 remainder bits)
 
-            nop   //
-            nop   //
+            nop   // I
+            nop   // want
+            nop   // to
+            nop   // die
             nop   //
             b     _end
 

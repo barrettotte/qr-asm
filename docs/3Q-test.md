@@ -34,8 +34,8 @@ Useful GDB commands for my `3Q` test on payload `https://github.com/barrettotte`
 `x/18ub &m_poly`
 
 ```
-byte 0     = polynomial degree = 16
-bytes 1-17 = 17 polynomial terms
+byte 0     = polynomial length = 17
+bytes 1-17 = polynomial terms
 
 65x^16 + 230x^15 + 135x^14 + 71x^13 + 
 71x^12 + 7x^11  + 51x^10 + 162x^9 + 
@@ -45,7 +45,7 @@ bytes 1-17 = 17 polynomial terms
 
 Note: stored in order of term exponent
 
-0x?????:        16      230     34      86      135     70      151     118
+0x?????:        17      230     34      86      135     70      151     118
 0x?????:        246     242     162     51      7       71      71      135
 0x?????:        230     65
 ```
@@ -55,8 +55,8 @@ Note: stored in order of term exponent
 `x/20ub &g_poly`
 
 ```
-byte     0 = polynomial degree = 18
-bytes 1-19 = 19 polynomial terms
+byte     0 = polynomial length = 19
+bytes 1-19 = polynomial terms
 
 1x^18 + 239x^17 + 251x^16 + 183x^15 + 
 113x^14 + 149x^13 + 175x^12 + 199x^11 + 
@@ -75,5 +75,5 @@ Verifying debug outputs from [../jupyter/lunch-and-learn.ipynb](../jupyter/lunch
 - `x/20ub &g_poly`
 - `x/24ub &gtmpA_poly`
 - `x/24ub &gtmpB_poly`
-- `x/24ub &prd_mono`
-- `x/24ub &prd_poly`
+- `x/24ub &prdA_poly`
+- `x/24ub &prdB_poly`
