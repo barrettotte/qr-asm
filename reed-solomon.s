@@ -147,54 +147,66 @@ gf256_div:                              // ***** division in GF(256) *****
             pop   {r4-r11, lr}          // restore caller's vars + return address
             bx    lr                    // return from subroutine
 
-poly_copy:                              // ***** polynomial clear *****
+poly_clr:                               // ***** polynomial clear *****
                                         // r0 - pointer to polynomial to clear
                                         // r1 - unused
                                         // r2 - unused
                                         // r3 - unused
             push  {r4-r11, lr}          // save caller's vars + return address
 
-            nop   // TODO:  actually might not do this...idk yet
-
-            pop   {r4-r11, lr}          // restore caller's vars + return address
-            bx    lr                    // return from subroutine
-
-poly_copy:                              // ***** polynomial copy *****
-                                        // r0 - pointer to destination polynomial
-                                        // r1 - unused
-                                        // r2 - pointer to target polynomial
-                                        // r3 - unused
-            push  {r4-r11, lr}          // save caller's vars + return address
-
-            nop   // TODO:  actually might not do this...idk yet
+            ldrb  r4, [r0]              // p.length
+            mov   r5, #0                //
+            mov   r6, r5                // i = 0
+_pclr_loop:
+            strb  r5, [r0, r6]          // p.terms[i] = 0
+            add   r6, r6, #1            // i++
+            cmp   r6, r4                //
+            ble   _pclr_loop            // while (i <= p.length)
 
             pop   {r4-r11, lr}          // restore caller's vars + return address
             bx    lr                    // return from subroutine
 
 poly_norm:                              // ***** polynomial normalization *****
-                                        // r0 - pointer to store normalized polynomial
+                                        // r0 - (n) pointer to store normalized polynomial
                                         // r1 - unused
-                                        // r2 - pointer to polynomial to normalize
+                                        // r2 - (p) pointer to polynomial to normalize
                                         // r3 - unused
             push  {r4-r11, lr}          // save caller's vars + return address
 
-            nop   // TODO:  max_nonzero = p.length - 1
-            nop   // TODO:  i = p.length - 1
-            nop   // TODO:  
-            nop   // TODO:  while (i >= 0):
-            nop   // TODO:    if p.terms[i] != 0:
-            nop   // TODO:      break
-            nop   // TODO:    max_nz = i - 1
-            nop   // TODO:    i--
-            nop   // TODO:  
-            nop   // TODO:  if max_nz < 0:
-            nop   // TODO:    return blank polynomial, length 0
-            nop   // TODO:  elif max_nz < (p.length - 1):
-            nop   // TODO:    p.terms = p.terms[0: max_nz+1]
+            ldrb  r4, [r2]              // load p.length
+            sub   r4, r4, #1            // 
+            mov   r7, r4                // max_nz = p.length - 1
+            mov   r5, r4                // i = p.length - 1
+_pnorm_nzloop:
+            ldrb  r6, [r2, r4]          // p.terms[i]
+            cmp   r6, #0                // if (p.terms[i] != 0):
+            bne   _pnorm_maxnz          //   break
 
+            sub   r4, r4, #1            // i--
+            mov   r7, r4                // max_nz = i - 1
+            cmp   r5, r4                //
+            bne   _pnorm_nzloop         // while (i >= 0)
+_pnorm_maxnz:
+            cmp   r7, #0                // leave if negative, shouldn't happen...
+            blt   _pnorm_done           // if (max_nz < 0)
+            //cmp   r7, r4                //
+            //bge   _pnorm_skip           // elif (max_nz >= p.length - 1)
+
+            strb  r7, [r0]              // n.length = max_nz
+            add   r7, #1                // max_nz += 1
+            mov   r5, #1                // j = 1
+_pnorm_norm_loop:
+            ldrb  r8, [r2, r5]          // r8 = p[j]
+            strb  r8, [r0, r5]          // n[j] = p[j]
+            add   r5, r5, #1            // j++
+            cmp   r5, r7                //
+            ble   _pnorm_norm_loop      // while (j < max_nz+1)
+            b     _pnorm_done           // return
+_pnorm_skip:                            // already normalized
+            mov   r0, r2                // move pointers
+_pnorm_done:
             pop   {r4-r11, lr}          // restore caller's vars + return address
             bx    lr                    // return from subroutine
-     
 
 poly_add:                               // ***** polynomial addition *****
                                         // r0 - pointer to store sum polynomial
@@ -219,6 +231,7 @@ _padd_len:
 
             nop   // TODO: I think we HAVE to zero-index here
 
+            @ add   r4, #1                // zero indexing adjust
             mov   r7, #1                // i = 1
 _padd_loop:
             sub   r1, r7, #1            // zero index
@@ -246,7 +259,8 @@ _padd_next:
             cmp   r7, r4                //
             ble   _padd_loop            // while (i <= sum.length)
 
-            nop   // TODO: poly_norm
+            mov   r2, r0                // destination and target are same
+            bl    poly_norm             // normalize polynomial
 
             nop   // TODO: if temp polynomial used, copy it to output pointer?
 
@@ -290,13 +304,15 @@ _pmul_loop_b:
             sub   r7, r7, #1            //
             strb  r0, [r3, r7]          // tempB.terms[i+j] = GF(256) product
             strb  r7, [r3]              // tempB.length = i + j + 1
-            
+
             mov   r0, r4                // output sum to tempA polynomial
             mov   r2, r4                // operand A = tempA polynomial, operand B = tempB polynomial
             bl    poly_add              // perform polynomial addition
-            pop   {r2, r3}              // restore pointers to polynomial operands
-
 _pmul_next_b:
+            mov   r2, r3                // pointer to tempB polynomial
+            bl    poly_clr              // clear tempB polynomial
+            pop   {r2, r3}              // restore polynomial operand pointers
+
             add   r9, r9, #1            // j++
             cmp   r9, r6                //
             ble   _pmul_loop_b          // while (j <= B.length)
@@ -306,19 +322,24 @@ _pmul_next_a:
             ble   _pmul_loop_a          // while (i <= A.length)
 
             pop   {r0}                  // restore output pointer
+            mov   r2, r4                // normalize temp polynomial
+            bl    poly_norm             // normalize polynomial
 
-            nop   // TODO: poly_norm
+            push  {r0}                  // save output pointer
+            mov   r0, r4                // pointer to tempA polynomial
+            bl    poly_clr              // clear tempA polynomial
+            pop   {r0}                  // restore output pointer
 
-            mov   r7, #0                // zero for clearing temp polynomial
-            mov   r8, #0                // i = 0
-            ldrb  r9, [r0]              // load product.length
-_pmul_copy:
-            ldrb  r6, [r4, r8]          // tempA.terms[i]
-            strb  r6, [r0, r8]          // product.terms[i] = tempA.terms[i]
-            strb  r7, [r4, r8]          // tempA.terms[i] = 0
-            add   r7, r7, #1            // i++
-            cmp   r7, r9                //
-            ble   _pmul_copy            // while (i <= product.length)
+@             mov   r7, #0                // zero for clearing temp polynomial
+@             mov   r8, #0                // i = 0
+@             ldrb  r9, [r0]              // load product.length
+@ _pmul_copy:
+@             ldrb  r6, [r4, r8]          // tempA.terms[i]
+@             strb  r6, [r0, r8]          // product.terms[i] = tempA.terms[i]
+@             strb  r7, [r4, r8]          // tempA.terms[i] = 0
+@             add   r7, r7, #1            // i++
+@             cmp   r7, r9                //
+@             ble   _pmul_copy            // while (i <= product.length)
 
             pop   {r4-r11, lr}          // restore caller's vars + return address
             bx    lr                    // return from subroutine
