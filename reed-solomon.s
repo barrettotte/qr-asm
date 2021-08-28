@@ -1,9 +1,20 @@
-// subroutines needed for Reed-Solomon error correction
+// Reed-Solomon error correction
 
-            .include "const.s"
+            // exported subroutines
+            .global new_mpoly    // build polynomial from message
+            .global new_gpoly    // build generator polynomial
 
-            .global new_mpoly
-            .global new_gpoly
+            .global gf256_mul    // multiplication in Galois Field 2^8
+            .global gf256_inv    // inversion in Galois Field 2^8
+            .global gf256_div    // division in Galoi field 2^8
+            
+            .global poly_clr     // reset a polynomial's data
+            .global poly_norm    // polynomial normalization
+            .global poly_add     // polynomial addition
+            .global poly_mul     // polynomial multiplication
+
+            // constants
+            .equ POLY_SIZE, 128  // max terms in polynomial
 
             .data
 
@@ -76,10 +87,10 @@ gf256_log:  // Galois field 256 logarithm table
             .byte 116, 214, 244, 234, 168, 80, 88, 175    // 248 - 255
 
                                         // polynomials:
-gtmpA_poly: .space MAX_DATA_CAP+1       //   scratch polynomial for generator polynomial create
-gtmpB_poly: .space MAX_DATA_CAP+1       //   scratch polynomial for generator polynomial create
-prdA_poly:  .space (MAX_DATA_CAP+1)*2   //   scratch polynomial for polynomial multiplication (operand A)
-prdB_poly:  .space (MAX_DATA_CAP+1)*2   //   scratch polynomial for polynomial multiplication (operand B)
+gtmpA_poly: .space POLY_SIZE            //   scratch polynomial for generator polynomial create
+gtmpB_poly: .space POLY_SIZE            //   scratch polynomial for generator polynomial create
+prdA_poly:  .space POLY_SIZE            //   scratch polynomial for polynomial multiplication (operand A)
+prdB_poly:  .space POLY_SIZE            //   scratch polynomial for polynomial multiplication (operand B)
                                         //
                                         //   struct polynomial {
                                         //     byte length;   // number of terms
