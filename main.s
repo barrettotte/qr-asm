@@ -1,6 +1,6 @@
 // Generate a byte-mode QR Code (v1-4)
 
-            .include "const.inc"
+            .include "const.s"
 
             .global _start
 

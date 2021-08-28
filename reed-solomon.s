@@ -1,6 +1,6 @@
 // subroutines needed for Reed-Solomon error correction
 
-            .include "const.inc"
+            .include "const.s"
 
             .global new_mpoly
             .global new_gpoly
