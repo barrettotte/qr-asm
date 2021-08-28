@@ -2,7 +2,6 @@
 
             .include "const.inc"
 
-            // exported subroutines
             .global new_mpoly
             .global new_gpoly
 
@@ -76,16 +75,20 @@ gf256_log:  // Galois field 256 logarithm table
             .byte 79, 174, 213, 233, 230, 231, 173, 232   // 240 - 247
             .byte 116, 214, 244, 234, 168, 80, 88, 175    // 248 - 255
 
-gtmpA_poly: .space MAX_DATA_CAP+1       // scratch polynomial for generator polynomial create
-gtmpB_poly: .space MAX_DATA_CAP+1       // scratch polynomial for generator polynomial create
-sum_poly:   .space (MAX_DATA_CAP+1)     // scratch polynomial for polynomial addition
-prdA_poly:  .space (MAX_DATA_CAP+1)*2   // scratch polynomial for polynomial multiplication
-prdB_poly:  .space (MAX_DATA_CAP+1)*2   // scratch polynomial for polynomial multiplication
+                                        // polynomials:
+gtmpA_poly: .space MAX_DATA_CAP+1       //   scratch polynomial for generator polynomial create
+gtmpB_poly: .space MAX_DATA_CAP+1       //   scratch polynomial for generator polynomial create
+prdA_poly:  .space (MAX_DATA_CAP+1)*2   //   scratch polynomial for polynomial multiplication (operand A)
+prdB_poly:  .space (MAX_DATA_CAP+1)*2   //   scratch polynomial for polynomial multiplication (operand B)
                                         //
-                                        // polynomial_struct = {
-                                        //   byte length,
-                                        //   byte[] terms  // looped via one-indexing
-                                        // }
+                                        //   struct polynomial {
+                                        //     byte length;   // number of terms
+                                        //     byte terms[];  // array of terms;
+                                        //   }
+                                        //
+                                        //   example: [5, 3, 2, 0, 4, 9]
+                                        //     = 3x^0 + 2x^1 + 0x^2 + 4x^3 + 9x^4  (5 terms)
+                                        //
             .text
 
 gf256_mul:                              // ***** multiplication in GF(256) *****
@@ -96,7 +99,7 @@ gf256_mul:                              // ***** multiplication in GF(256) *****
             push  {r4-r11, lr}          // save caller's vars + return address
 
             mov   r0, #0                // init product
-            and   r4, r2, r3            // if either A or B are zero, then r4 = 0
+            orr   r4, r2, r3            // if either A or B are zero, then r4 = 0
             cmp   r4, r0                // check if r4 = 0
             beq   _gf256m_done          // leave routine; 0 * n = 0
 
@@ -105,45 +108,72 @@ gf256_mul:                              // ***** multiplication in GF(256) *****
             ldrb  r6, [r4, r2]          // gf256_log[r2]
             ldrb  r7, [r4, r3]          // gf256_log[r3]
             add   r6, r6, r7            // gf256_log[r2] + gf256_log[r3]; modulo operand A
-            //ldrb  r6, [r5, r6]          // r6 = gf256_anti[r6]; 
 
-            mov   r7, #255              // load modulo operand B
+            mov   r7, #255              // load modulo operand B = Galois field size - 1
             udiv  r8, r6, r7            // (a / b)
-            umull r10, r9, r8, r7       // (a / b) * b  (throw away r10 = rdhi)
-            sub   r8, r6, r9            // a - ((a / b) * b)
-
+            umull r10, r9, r8, r7       // (a / b) * b  (throw away rdhi=r9)
+            sub   r8, r6, r10           // a - ((a / b) * b)
             ldrb  r0, [r5, r8]          // gf256_anti[r6 % 255]
-
-_gf256m_done:                           // leave subroutine
+_gf256m_done:
             pop   {r4-r11, lr}          // restore caller's vars + return address
             bx    lr                    // return from subroutine
 
 gf256_inv:                              // ***** inverse in GF(256) *****
-                                        // r0 - unused
+                                        // r0 - inverse of R2
                                         // r1 - error if non-zero
-                                        // r2 - unused
+                                        // r2 - number to invert in GF(256)
                                         // r3 - unused
             push  {r4-r11, lr}          // save caller's vars + return address
-            mov   r1, #0                // init error
 
-            // TODO: if r2 == 0 raise exception zero has no inverse
-            // TODO: else r0 = gf256_anti[255 - gf256_log[r2]]
+            mov   r1, #0                // init error status
+            cmp   r2, #0                //
+            beq   _gf256i_err           // assert r2 != 0
+            ldr   r5, =gf256_log        // pointer to logarithm table
+            ldr   r6, =gf256_anti       // pointer to anti-logarithm table
+            ldrb  r7, [r5, r2]          // gf256_log[r2]
 
+            mov   r4, #255              // Galois field size - 1
+            sub   r4, r4, r7            // 255 - gf256_log[r2]
+            ldrb  r0, [r6, r4]          // gf256_anti[255 - gf256_log[r2]]
+            b     _gf256i_done          // leave subroutine
+_gf256i_err:
+            mov   r1, #1                // return error code
+_gf256i_done:
             pop   {r4-r11, lr}          // restore caller's vars + return address
             bx    lr                    // return from subroutine
 
 gf256_div:                              // ***** division in GF(256) *****
-                                        // r0 - unused
+                                        // r0 - quotient
                                         // r1 - error if non-zero
-                                        // r2 - unused
-                                        // r3 - unused
+                                        // r2 - operand A
+                                        // r3 - operand B
             push  {r4-r11, lr}          // save caller's vars + return address
+
+            mov   r0, #0                // init quotient
             mov   r1, #0                // init error
+            cmp   r2, #0                //
+            beq   _gf256d_done          // 0 / x = 0
 
-            // TODO: if a == 0 then r0 = 0
-            // TODO: elif b == 0 then raise exception div by zero
-            // TODO: else gf256_mul (r2, gf256_inv(r3))
+            cmp   r3, #0                // 
+            beq   _gf256d_err1          // if r3 == 0, error (div by zero)
 
+            mov   r4, r2                // retain operand A
+            mov   r2, r3                // load operand B
+            bl    gf256_inv             // invert operand B
+
+            cmp   r1, #0                // 
+            bne   _gf256d_err2          // if r0 != 0, then error occurred
+
+            mov   r2, r4                // load operand A
+            mov   r3, r0                // load inverted operand B
+            bl    gf256_mul             // GF(256) multiply; return product in r0
+
+            b     _gf256d_done          // return quotient
+_gf256d_err1:
+            mov   r1, #1                // divide by zero error
+_gf256d_err2:
+            mov   r1, #2                // GF(256) invert error
+_gf256d_done:
             pop   {r4-r11, lr}          // restore caller's vars + return address
             bx    lr                    // return from subroutine
 
@@ -155,7 +185,7 @@ poly_clr:                               // ***** polynomial clear *****
             push  {r4-r11, lr}          // save caller's vars + return address
 
             ldrb  r4, [r0]              // p.length
-            mov   r5, #0                //
+            mov   r5, #0                // empty term
             mov   r6, r5                // i = 0
 _pclr_loop:
             strb  r5, [r0, r6]          // p.terms[i] = 0
@@ -174,7 +204,6 @@ poly_norm:                              // ***** polynomial normalization *****
             push  {r4-r11, lr}          // save caller's vars + return address
 
             ldrb  r4, [r2]              // load p.length
-            @ sub   r4, r4, #1            // 
             mov   r7, r4                // max_nz = p.length - 1
             mov   r5, r4                // i = p.length - 1
 _pnorm_nzloop:
@@ -189,12 +218,10 @@ _pnorm_nzloop:
 _pnorm_maxnz:
             cmp   r7, #0                // leave if negative, shouldn't happen...
             blt   _pnorm_done           // if (max_nz < 0)
-            //cmp   r7, r4                //
-            //bge   _pnorm_skip           // elif (max_nz >= p.length - 1)
 
             strb  r7, [r0]              // n.length = max_nz
             add   r7, #1                // max_nz += 1
-            mov   r5, #1                // j = 0
+            mov   r5, #0                // j = 0
 _pnorm_norm_loop:
             add   r6, r5, #1            // y = j + 1
             ldrb  r8, [r2, r6]          // r8 = p[y]
@@ -264,7 +291,7 @@ poly_mul:                               // ***** polynomial multiplication *****
 
             push  {r0}                  // save output pointer for later
             ldr   r0, =prdA_poly        // pointer to temp A polynomial
-            @ bl    poly_clr              // clear temp A polynomial
+            bl    poly_clr              // clear temp A polynomial
             ldrb  r5, [r2]              // A.length
             ldrb  r6, [r3]              // B.length
             add   r7, r5, r6            //
@@ -356,14 +383,13 @@ _gpoly_copy:                            // copy current generator polynomial to 
             cmp   r6, r9                // compare index and ECW per block
             ble   _gpoly_copy           // while (j <= g_poly.length)
 _gpoly_iter:
-            nop                         // r0; pointer to generator polynomial
             mov   r2, r10               // pointer to scratch polynomial A; operand A
             mov   r3, r5                // pointer to scratch polynomial B; operand B
-            bl    poly_mul              // call subroutine for polynomial multiplication
+            bl    poly_mul              // polynomial multiply; r0 = generator polynomial
 
             add   r8, r8, #1            // i++
             cmp   r8, r9                // compare i and ECW per block
-            ble   _gpoly_loop           // while (i <= g_poly.length)
+            blt   _gpoly_loop           // while (i < g_poly.length)
 
             pop   {r4-r11, lr}          // restore caller's vars + return address
             bx    lr                    // return from subroutine

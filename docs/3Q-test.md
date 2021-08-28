@@ -68,7 +68,7 @@ Note: stored in order of term exponent
 
 ```
 
-### Verify Generator Polynomial Loop
+### Verify Generator Polynomial Iterations
 
 Verifying debug outputs from [../jupyter/lunch-and-learn.ipynb](../jupyter/lunch-and-learn.ipynb)
 
@@ -77,3 +77,28 @@ Verifying debug outputs from [../jupyter/lunch-and-learn.ipynb](../jupyter/lunch
 - `x/24ub &gtmpB_poly`
 - `x/24ub &prdA_poly`
 - `x/24ub &prdB_poly`
+
+set breakpoint to `blt   _gpoly_loop` and repeat `c` and `x/20ub &g_poly` in GDB
+
+```
+- [x]  00:    2     1     1
+- [x]  01:    3     2     3     1
+- [x]  02:    4     8    14     7     1
+- [x]  03:    5    64   120    54    15     1
+- [x]  04:    6   116   147    63   198    31     1
+- [x]  05:    7    38   227    32   218     1    63     1
+- [x]  06:    8   117    68    11   164   154   122   127     1
+- [x]  07:    9    24   200   173   239    54    81    11   255     1
+- [x]  08:   10    37   197   232   164   235   245   158   207   226     1
+- [x]  09:   11   193   157   113    95    94   199   111   159   194   216     1
+- [x]  10:   12   160   116   144   248   162   219   123    50   163   130   172     1
+- [x]  11:   13    97   213   127    92    84     7    31   220   118    67   119    68     1
+- [x]  12:   14   120   132    83    43    46    13    52    17   177    17   227    73   137     1
+- [x]  13:   15   163   234   210   166   127   195   158    43   151   174    70   114    54    14     1
+- [x]  14:   16    26   134    32   151   132   139   105   105    10    74   112   163   111   196    29     1
+- [x]  15:   17    59    36    50    98   229    41    65   163     8    30   209    68   189   104    13    59     1
+- [x]  16:   18    79    99   125    53    85   134   143    41   249    83   197    22   119   120    83    66   119     1
+- [x]  17:   19   146   217    67    32    75   173    82    73   220   240   215   199   175   149   113   183   251   239     1
+
+Wooo! I literally struggled on this for over a week :^)
+```

@@ -7,3 +7,5 @@ asm-tests/bin/
 
 bin/
 *.o
+
+test.py
