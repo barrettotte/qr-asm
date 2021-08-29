@@ -60,7 +60,7 @@ tbl_rem:    .byte 0, 7, 7, 7            // remainder lookup (v1-4)
 msg:        .asciz "https://github.com/barrettotte"
             .equ msg_len, (.-msg)       // (30 chars) TODO: from cmd line args
 
-version:    .space 1                    // QR code version
+version:    .space 1                    // QR code version (zero indexed)
 eclvl_idx:  .space 1                    // error correction level index (L,M,Q,H)
 eclvl:      .space 1                    // error correction level value (1,0,3,2)
 ecprop_idx: .space 1                    // error correction properties index
@@ -69,13 +69,15 @@ data_cap:   .space 1                    // max capacity for data words
 ecwb_cap:   .space 1                    // error correction words per block
 g1b_cap:    .space 1                    // number of blocks in group 1
 g1bw_cap:   .space 1                    // data words in each group 1 block
+pyld_size:  .space 1                    // calculated size of payload
+pyld_bits:  .space 2                    // payload size in bits
 
 count_ind:  .space 1                    // character count indicator byte
 data_words: .space MAX_DATA_CAP         // all data words
 dw_block:   .space MAX_DWB              // data word block
 ecw_blocks: .space MAX_ECWB*MAX_G1B     // all error correction blocks
 ecw_block:  .space MAX_ECWB             // error correction words block
-payload:    .space MAX_DATA_CAP         // payload of message and config
+payload:    .space MAX_PAYLOAD          // payload of data and error correction blocks
             .text
 
 _start:                                 // ***** program entry point *****
@@ -239,7 +241,7 @@ dwb_next:                               // iterate to next word
 reed_sol:                               // ***** Reed-Solomon error correction *****
             ldr   r0, =ecw_block        // pointer to error correction words block
             mov   r1, r7                // pointer to data block
-            mov   r2, r6                // pointer to data words in each block
+            mov   r2, r6                // data words in each block
             ldr   r3, =ecwb_cap         // pointer to error correction words per block
             ldrb  r3, [r3]              // load ECW per block
             push  {r3}                  // save ECW per block; r3 gets clobbered
@@ -264,11 +266,65 @@ block_next:                             // iterate to next data block
             cmp   r4, r5                // check loop condition
             blt   block_loop            // while (i < blocks in group)
 
-interleave:                             // ***** Interleave data and ECW blocks *****
-            nop   // TODO: interleave payload data and error correction data  (3Q - 70 words)
-            nop   // TODO: add remainder bits (7 remainder bits)
+interleave_dw:                          // ***** interleave data blocks into payload *****
+            ldr   r0, =payload          // pointer to payload
+            mov   r4, #0                // payload_idx
 
+            ldr   r11, =data_words      // pointer to data words array
+            mov   r1, #0                // i = 0
+_pay_dw_loop:
+            mov   r7, #0                // dw_offset = 0
+            mov   r2, #0                // j = 0
+_pay_dwb_loop:
+            add   r10, r1, r7           // i + dw_offset
+            ldrb  r8, [r11, r10]        // data_words[i + dw_offset]
+            strb  r8, [r0, r4]          // payload[payload_idx] = data_words[i + dw_offset]
+            add   r4, r4, #1            // payload_idx++
+_pay_dwb_next:
+            add   r7, r7, r6            // dw_offset += data words per block
+            add   r2, r2, #1            // j++
+            cmp   r2, r5                // check loop condition
+            blt   _pay_dwb_loop         // while (j < blocks)
+_pay_dw_next:
+            add   r1, r1, #1            // i++
+            cmp   r1, r6                // check loop condition
+            blt   _pay_dw_loop          // while (i < data words per block)
 
+interleave_ecw:                         // ***** interleave ECW blocks into payload *****
+            ldr   r11, =ecw_blocks      // pointer to ECW array
+            mov   r1, #0                // i = 0
+_pay_ecw_loop:
+            mov   r7, #0                // ecw_offset = 0
+            mov   r2, #0                // j = 0
+_pay_ecwb_loop:
+            add   r10, r1, r7           // i + ecw_offset
+            ldrb  r8, [r11, r10]        // ecw_blocks[i + ecw_offset]
+            strb  r8, [r0, r4]          // payload[payload_idx] = ecw[i + ecw_offset]
+            add   r4, r4, #1            // payload_idx++
+_pay_ecwb_next:
+            add   r7, r7, r3            // ecw_offset += ECW per block
+            add   r2, r2, #1            // j++
+            cmp   r2, r5                // check loop condition
+            blt   _pay_ecwb_loop        // while (j < blocks)
+_pay_ecw_next:
+            add   r1, r1, #1            // i++
+            cmp   r1, r3                // check loop condition
+            blt   _pay_ecw_loop         // while (i < ECW per block)
+
+add_remainder:                          // ***** add remainder bits *****
+            ldr   r9, =pyld_size        // pointer to payload size  TODO: needed?
+            strb  r4, [r9]              // store size of payload    TODO: needed?
+
+            lsl   r4, r4, #3            // convert size to bits; 2^3 = 8
+            ldr   r5, =tbl_rem          // pointer to remainder table
+            ldr   r6, =version          // pointer to version
+            ldrb  r6, [r6]              // load version
+            ldrb  r6, [r5, r6]          // tbl_rem[version] = remainder
+            add   r4, r4, r6            // bits = (payload bytes * 8) + remainder
+            ldr   r5, =pyld_bits        // pointer to payload size in bits
+            strh  r4, [r5]              // store calculated payload size
+
+            nop   // now we start building the QR matrix
 
             nop  // ****************************************************************
             nop  //     END OF PROGRAM !!!!  TODO: remove when finished developing

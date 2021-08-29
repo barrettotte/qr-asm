@@ -1,6 +1,6 @@
 # Debugging My 3Q Test
 
-Useful GDB commands for my `3Q` test on payload `https://github.com/barrettotte`
+Useful GDB commands for my `3Q` test on message `https://github.com/barrettotte`
 
 ## Input Message
 
@@ -15,9 +15,9 @@ Useful GDB commands for my `3Q` test on payload `https://github.com/barrettotte`
 0x?????:        116     116     111     116     116     101
 ```
 
-## Padding the Payload
+## Padding the Message
 
-`x/34ub &payload`
+`x/34ub &data_words`
 
 ```
 34 bytes = mode + char count indicator + encoded message
@@ -223,3 +223,27 @@ ECW block 1 copied; 36 words
 0x?????:        227     15      117     139     15      178     142     79
 0x?????:        151     162     200     57
 ```
+
+## Interleave Data and Error Correction Blocks
+
+- `x/70ub &payload`
+- `x/36ub &ecw_blocks`
+- `x/34ub &data_words`
+
+```
+interleaved data; 70 words = 2(18 + 17)
+
+0x?????:        65      54      230     246     135     210     71      246
+0x?????:        71      38      7       23      51      39      162     38
+0x?????:        242     87      246     71      118     70      151     247
+0x?????:        70      71      135     70      86      80      34      236
+0x?????:        230     17      253     9       51      107     17      30
+0x?????:        168     118     54      21      42      108     245     227
+0x?????:        204     15      174     117     233     139     27      15
+0x?????:        198     178     80      142     35      79      131     151
+0x?????:        0       162     242     200     202     57
+```
+
+Add remainder, verify bit size - `x/1uh &pyld_bits` = 567 = (70 * 8) + 7
+
+
