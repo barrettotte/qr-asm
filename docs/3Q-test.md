@@ -112,8 +112,14 @@ Verifying the rest of the Reed-Solomon error correction steps.
 
 - `x/18ub &msg_poly`
 - `x/20ub &gen_poly`
+
+### Message Polynomial Prepare
+
+Ensure lead term doesn't become too small during division.
+
 - `x/35ub &tmpA_poly`
 - `x/64ub &tmpB_poly`
+- `x/18ub &msg_poly`
 
 ```
 (1x^18) * msg_poly
@@ -135,20 +141,64 @@ byte 1 = 35 terms, bytes 2-35 = terms array
 0x?????:        0       0       0       0       0       0       0       0
 ```
 
+### Polynomial Remainder
+
 poly_remainder(msg_poly, gen_poly)
 
-- `x/35ub &rem_poly`
-- `x/40ub &tmp_mono`
-- `x/40ub &tmpC_poly`
-
 - `x/18ub &msg_poly`
+- `x/40ub &tmpA_poly`
+- `x/40ub &tmpB_poly`
+
+check `divisor = denominator * mono` => `&tmpC_poly = &gen_poly * &tmp_mono`
+
+- `x/40ub &tmp_mono`
 - `x/20ub &gen_poly`
-- `x/35ub &prdA_poly`
-- `x/35ub &prdB_poly`
+- `x/35ub &tmpC_poly`
 
-Finding polynomial remainder of msg_poly / gen_poly
+check `remainder = remainder + divisor` => `&rem_poly = &rem_poly + &tmpC_poly`
 
+- Byte one should go down each iteration
+- `x/35ub &rem_poly`
+- `x/35ub &tmpC_poly`
 
+Verify polynomial remainder calculated correctly:
 
+`x/19ub &rem_poly`
+
+**Note: This is for Block 0!**
+
+```
+rem_poly = (msg_poly * 1x^18) / (gen_poly)
+
+byte 1 = 18 terms, bytes 2-18 = terms array
+
+202x^0 + 242x^1 + 0x^2 + 131x^3 + 35x^4 + 80x^5 + 198x^6 + 27x^7 + 233x^8
+  + 174x^9 + 204x^10 + 245x^11 + 42x^12 + 54x^13 + 168x^14 + 17x^15
+    + 51x^16 + 253x^17
+
+0x?????:        18      202     242     0       131     35      80      198
+0x?????:        27      233     174     204     245     42      54      168
+0x?????:        17      51      253
+```
+
+### ECW Block
+
+Verify error correction word block filled correctly.
+
+**Note: This is for Block 0!**
+
+- `x/28ub &ecw_block`
+- `x/19ub &rem_poly`
+
+```
+18 error correction words (max of 28).
+
+Note: we know the size of the block from the main program. (&ecwb_cap)
+
+0x?????:        253     51      17      168     54      42      245     204
+0x?????:        174     233     27      198     80      35      131     0
+0x?????:        242     202     0       0       0       0       0       0
+0x?????:        0       0       0       0
+```
 
 

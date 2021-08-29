@@ -236,6 +236,7 @@ reed_sol:                               // ***** Reed-Solomon error correction *
             ldr   r3, =ecwb_cap         // pointer to error correction words per block
             ldrb  r3, [r3]              // load ECW per block
             bl    reed_solomon          // perform Reed-Solomon error correction
+            nop
 
             nop   // TODO: interleave payload data and error correction data  (3Q - 70 words)
             nop   // TODO: add remainder bits (7 remainder bits)

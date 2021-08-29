@@ -2,6 +2,7 @@
 
 AS = arm-none-eabi-as
 LD = arm-none-eabi-ld
+GDB = arm-none-eabi-gdb
 
 OUT = bin
 BIN = qrcode
@@ -16,7 +17,7 @@ build:		$(SRC)
 
 %.o : %.s
 			$(AS) -g $< -o $@
-			
+
 link:
 			$(LD) *.o -o $(OUT)/$(BIN)
 
@@ -24,8 +25,8 @@ clean:
 			@mkdir -p $(OUT)
 			rm -f *.o $(OUT)/$(BIN)
 
-debug:
+qemu:
 			qemu-arm -singlestep -g 1234 $(OUT)/$(BIN)
 
-# make && make debug
-# arm-none-eabi-gdb -ex 'file bin/qrcode' -ex 'target remote localhost:1234' -ex 'layout regs'
+debug:  
+            $(GDB) -ex 'file $(OUT)/$(BIN)' -ex 'target remote localhost:1234' -ex 'layout regs'

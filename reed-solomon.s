@@ -92,12 +92,13 @@ gf256_log:  // Galois field 256 logarithm table
 msg_poly:   .space POLY_SIZE            //   message polynomial
 gen_poly:   .space POLY_SIZE            //   generator polynomial
 rem_poly:   .space POLY_SIZE            //   remainder polynomial used in reed-solomon subroutine
-tmp_mono:  .space POLY_SIZE             //   scratch monomial
+tmp_mono:   .space POLY_SIZE            //   scratch monomial
 tmpA_poly:  .space POLY_SIZE            //   scratch polynomial
 tmpB_poly:  .space POLY_SIZE            //   scratch polynomial
 tmpC_poly:  .space POLY_SIZE            //   scratch polynomial
 prdA_poly:  .space POLY_SIZE            //   scratch polynomial for polynomial multiplication (operand A)
 prdB_poly:  .space POLY_SIZE            //   scratch polynomial for polynomial multiplication (operand B)
+sum_poly:   .space POLY_SIZE            //   scratch polynomial for polynomial addition (sum)
                                         //
                                         //   struct polynomial {
                                         //     byte length;   // number of terms
@@ -144,8 +145,8 @@ gf256_inv:                              // ***** inverse in GF(256) *****
             push  {r4-r11, lr}          // save caller's vars + return address
 
             mov   r1, #0                // init error status
-            cmp   r2, #0                //
-            beq   _gf256i_err           // assert r2 != 0
+            cmp   r2, #0                // assert no error
+            beq   _gf256i_err           // if (r2 != 0) then error occurred
             ldr   r5, =gf256_log        // pointer to logarithm table
             ldr   r6, =gf256_anti       // pointer to anti-logarithm table
             ldrb  r7, [r5, r2]          // gf256_log[r2]
@@ -169,17 +170,17 @@ gf256_div:                              // ***** division in GF(256) *****
 
             mov   r0, #0                // init quotient
             mov   r1, #0                // init error
-            cmp   r2, #0                //
+            cmp   r2, #0                // check if we can early exit
             beq   _gf256d_done          // 0 / x = 0
 
-            cmp   r3, #0                // 
+            cmp   r3, #0                // assert no error
             beq   _gf256d_err1          // if r3 == 0, error (div by zero)
 
             mov   r4, r2                // retain operand A
             mov   r2, r3                // load operand B
             bl    gf256_inv             // invert operand B
 
-            cmp   r1, #0                // 
+            cmp   r1, #0                // assert no error
             bne   _gf256d_err2          // if r0 != 0, then error occurred
 
             mov   r2, r4                // load operand A
@@ -208,7 +209,7 @@ poly_clr:                               // ***** polynomial clear *****
 _pclr_loop:
             strb  r5, [r0, r6]          // p.terms[i] = 0
             add   r6, r6, #1            // i++
-            cmp   r6, r4                //
+            cmp   r6, r4                // check loop condition
             ble   _pclr_loop            // while (i <= p.length)
 
             pop   {r4-r11, lr}          // restore caller's vars + return address
@@ -231,7 +232,7 @@ _pnorm_nzloop:
 
             sub   r4, r4, #1            // i--
             mov   r7, r4                // max_nz = i - 1
-            cmp   r5, r4                //
+            cmp   r5, r4                // check loop condition
             bne   _pnorm_nzloop         // while (i >= 0)
 _pnorm_maxnz:
             cmp   r7, #0                // leave if negative, shouldn't happen...
@@ -245,7 +246,7 @@ _pnorm_norm_loop:
             ldrb  r8, [r2, r6]          // r8 = p[y]
             strb  r8, [r0, r6]          // n[y] = p[y]
             add   r5, r5, #1            // j++
-            cmp   r5, r7                //
+            cmp   r5, r7                // check loop condition
             ble   _pnorm_norm_loop      // while (j < max_nz+1)
             b     _pnorm_done           // return
 _pnorm_skip:                            // already normalized
@@ -264,13 +265,18 @@ poly_add:                               // ***** polynomial addition *****
             ldrb  r5, [r2]              // A.length
             ldrb  r6, [r3]              // B.length
             mov   r4, r5                // default to A.length
-            cmp   r6, r4                //
-            ble   _padd_len             // if (B.length <= A.length)
+            cmp   r6, r4                // check loop condition
+            ble   _padd_init            // if (B.length <= A.length)
             mov   r4, r6                // set to B.Length
-_padd_len:
-            strb  r4, [r0]              // store sum length
+_padd_init:                             // initialize temp sum polynomial
+            ldr   r8, =sum_poly         // pointer to temp sum polynomial
+            push  {r0}                  // save pointer to output polynomial
+            mov   r0, r8                //
+            bl    poly_clr              // reset data in temp sum polynomial
+            pop   {r0}                  // restore pointer to output polynomial
+            strb  r4, [r8]              // store sum length
             mov   r7, #0                // i = 0
-_padd_loop:
+_padd_loop:                             // loop over sum
             add   r1, r7, #1            // x = i + 1
             ldrb  r10, [r2, r1]         // A.terms[x]
             ldrb  r11, [r3, r1]         // B.terms[x]
@@ -282,19 +288,20 @@ _padd_AB:
             eor   r9, r10, r11          // use GF(256) addition its just XOR
             b     _padd_next            // iterate
 _padd_A:
-            cmp   r5, r7                //
+            cmp   r5, r7                // 
             ble   _padd_B               // elif (A.length <= i)
             ldrb  r9, [r2, r1]          // use A.terms[x]
             b     _padd_next            // iterate
 _padd_B:
             ldrb  r9, [r3, r1]          // else, use B.terms[x]
-_padd_next:
-            strb  r9, [r0, r1]          // set sum.terms[x]
+
+_padd_next:                             // setup next iteration of loop
+            strb  r9, [r8, r1]          // set sum.terms[x]
             add   r7, r7, #1            // i++
-            cmp   r7, r4                //
+            cmp   r7, r4                // check loop condition
             blt   _padd_loop            // while (i < sum.length)
 _padd_done:
-            mov   r2, r0                // destination and target are same
+            mov   r2, r8                // normalize temp sum into output polynomial
             bl    poly_norm             // normalize polynomial
 
             pop   {r4-r11, lr}          // restore caller's vars + return address
@@ -312,13 +319,13 @@ poly_mul:                               // ***** polynomial multiplication *****
             bl    poly_clr              // clear temp A polynomial
             ldrb  r5, [r2]              // A.length
             ldrb  r6, [r3]              // B.length
-            add   r7, r5, r6            //
+            add   r7, r5, r6            // calculate temp A polynomial size
             strb  r7, [r0]              // tempA.length = A.length + B.length
 
             mov   r8, #0                // i = 0
-_pmul_loop_a:
+_pmul_loop_a:                           // outer loop over operand A
             mov   r9, #0                // j = 0
-_pmul_loop_b:
+_pmul_loop_b:                           // inner loop over operand B
             add   r0, r8, #1            // x = i + 1
             add   r1, r9, #1            // y = j + 1
             ldrb  r10, [r2, r0]         // A.terms[x]
@@ -341,7 +348,7 @@ _pmul_loop_b:
             bl    poly_clr              // clear tempB polynomial for current iteration
             mov   r3, r0                // use tempB polynomial as operand B in polynomial addition
             add   r7, r8, r9            // i + j
-            add   r7, r7, #1            // 
+            add   r7, r7, #1            // adjust to one-indexing
             strb  r7, [r3]              // tempB.length = i + j + 1
             pop   {r0}                  // restore GF(256) product
             sub   r4, r4, #1            // adjust indexing to (x+y)-1
@@ -354,11 +361,11 @@ _pmul_loop_b:
             pop   {r2, r3}              // restore polynomial operand pointers
 _pmul_next_b:
             add   r9, r9, #1            // j++
-            cmp   r9, r6                //
+            cmp   r9, r6                // check loop condition
             blt   _pmul_loop_b          // while (j < B.length)
 _pmul_next_a:
             add   r8, r8, #1            // i++
-            cmp   r8, r5                //
+            cmp   r8, r5                // check loop condition
             blt   _pmul_loop_a          // while (i < A.length)
 
             pop   {r0}                  // restore output pointer
@@ -384,15 +391,14 @@ poly_rem:                               // ***** Remainder of Polynomial Long Di
 _prem_eq_loop:                          // check equality of operands
             ldrb  r7, [r2]              // numerator[i]
             ldrb  r8, [r10]             // denominator[i]
-            cmp   r8, r7                //
-            bne   _prem_neq             // numerator[i] != denominator[i]
+            cmp   r8, r7                // compare ith terms
+            bne   _prem_neq             // if (numerator[i] != denominator[i]); no error
 
             add   r6, r6, #1            // i++
-            cmp   r6, r4                //
+            cmp   r6, r4                // check loop condition
             ble   _prem_eq_loop         // while (i <= numerator.length)
-            
-            b     _prem_err1            // error: numerator and denominator are equal
 
+            b     _prem_err1            // error: numerator and denominator are equal
 _prem_neq:                              // numerator != denominator, all good
             mov   r6, #0                // i = 0
 
@@ -400,7 +406,7 @@ _prem_init_loop:                        // initialize remainder to numerator
             ldrb  r7, [r2, r6]          // numerator[i]
             strb  r7, [r11, r6]         // remainder[i] = numerator[i]
             add   r6, r6, #1            // i++
-            cmp   r6, r4                //
+            cmp   r6, r4                // check loop condition
             ble   _prem_init_loop       // while (i <= numerator.length)
 
             ldrb  r7, [r10]             // denominator.length
@@ -412,18 +418,18 @@ _prem_loop:
             bl    gf256_div             // GF(256) divide; A / B
 
             mov   r9, r0                // retain GF(256) quotient
-            cmp   r1, #0                //
+            cmp   r1, #0                // assert no error
             bne   _prem_err2            // if (r1 != 0) then error occurred
 
             mov   r0, r5                // pointer to tmp_mono
             bl    poly_clr              // reset tmp_mono data
-            sub   r8, r6, r7            //
+            sub   r8, r6, r7            // calc size of temp monomial
+            add   r8, r8, #1            // adjust to zero-indexing
             strb  r8, [r5]              // tmp_mono.length = rem.length - denom.length
-            add   r8, r8, #1            //
             strb  r9, [r5, r8]          // set tmp_mono coefficient as GF(256) quotient
 
             ldr   r8, =tmpC_poly        // pointer to temporary polynomial; divisor
-            mov   r0, r8                // store product in temporary polynomial
+            mov   r0, r8                // store polynomial product in temporary polynomial
             bl    poly_clr              // reset tmpC_poly
             mov   r2, r10               // pointer to denominator; operand A
             mov   r3, r5                // pointer to temp monomial; operand B
@@ -434,8 +440,9 @@ _prem_loop:
             mov   r3, r8                // pointer to temporary polynomial; operand B
             bl    poly_add              // polynomial add; A + B
 
-            cmp   r6, r7                //
+            cmp   r6, r7                // check loop condition
             bge   _prem_loop            // while (remainder.length >= denominator.length)
+            mov   r1, #0                // no error occurred, if we get here
 
             bl    poly_norm             // normalize remainder polynomial
             b     _prem_done            // return
@@ -553,16 +560,13 @@ reed_solomon:                           // ***** Reed-Solomon Error Correction *
             ldr   r9, =tmpA_poly        // pointer to temp polynomial
             mov   r0, r9                //
             bl    poly_clr              // reset temp polynomial data
-            mov   r0, r9                // output to temp polynomial
             mov   r2, r4                // pointer to message polynomial
             mov   r3, r8                // pointer to temp monomial
             bl    poly_mul              // perform polynomial multiplication
-            mov   r0, r8                // retain polynomial product
 
-            ldr   r10, =rem_poly        // pointer to remainder polynomial
-            mov   r0, r10               // 
+            ldr   r0, =rem_poly         // output to remainder polynomial
             bl    poly_clr              // reset remainder polynomial data
-            mov   r2, r9                // operand A; pointer to message polynomial
+            mov   r2, r9                // operand A; pointer to (msg_poly * monomial)
             mov   r3, r5                // operand B; pointer to generator polynomial
             bl    poly_rem              // find remainder polynomial of A / B
 
@@ -570,18 +574,20 @@ reed_solomon:                           // ***** Reed-Solomon Error Correction *
             mov   r4, r1                // retain error status of poly_rem
             pop   {r1}                  // restore data block pointer
             pop   {r0}                  // restore output pointer
-            cmp   r4, #0                //
+            cmp   r4, #0                // assert no error
             bne   _rs_err1              // if (r4 != 0) then error occurred in poly_rem
 
             ldrb  r4, [r5]              // poly_rem.length
             mov   r6, #0                // i = 0
-_rs_copy:                               // copy remainder polynomial terms to ECW block
-            add   r7, r6, #1            // x = i + 1
+_rs_copy:                               // copy remainder polynomial terms into ECW block (reversed)
+            add   r7, r6, #1            // x = i + 1; one-indexing
+            sub   r9, r4, r6            // y = poly_rem.length - i
+            sub   r9, r9, #1            // account for poly offset (length byte)
             ldrb  r8, [r5, r7]          // rem_poly[x]
-            strb  r8, [r0, r6]          // ECW[i] = rem_poly[x]
+            strb  r8, [r0, r9]          // ECW[y] = rem_poly[x]
 
             add   r6, r6, #1            // i++
-            cmp   r6, r4                //
+            cmp   r6, r4                // check loop condition
             blt   _rs_copy              // while (i < poly_rem.length)
 
             b     _rs_done              // return
