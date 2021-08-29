@@ -29,10 +29,8 @@ g1bw_cap:   .space 1                    // data words in each group 1 block
 
 count_ind:  .space 1                    // character count indicator byte
 payload:    .space MAX_DATA_CAP         // payload of message and config
-
-                                        // polynomials = [degree byte, term bytes]
-m_poly:      .space MAX_DATA_CAP+1      // message polynomial
-g_poly:      .space MAX_ECWB+2          // generator polynomial
+ecw_block:  .space MAX_ECWB             // error correction words block
+dw_block:   .space MAX_DWB              // data word block
 
             // Lookup Tables
 tbl_eclvl:                              // error correction level lookup
@@ -166,8 +164,8 @@ init_payload:                           // ***** init QR code payload *****
             mov   r8, #0                // msg_idx = 0
 
 inject_msg:                             // ***** inject message into payload *****
-            eor   r0, r0, r0            // reset scratch register for low nibble   TODO: needed?
-            eor   r1, r1, r1            // reset scratch register for high nibble  TODO: needed?
+            eor   r0, r0, r0            // reset scratch register for low nibble
+            eor   r1, r1, r1            // reset scratch register for high nibble
 
             mov   r1, #0xF              // load bitmask 0b00001111
             and   r1, r3, r1            // mask low nibble out of msg[msg_idx-1]
@@ -183,7 +181,7 @@ inject_msg:                             // ***** inject message into payload ***
             cmp   r8, r5                // compare msg_idx with msg_len
             blt   inject_msg            // while (msg_idx < msg_len)
 
-inject_done:                            // ***** finish message injection *****
+inject_done:                            // ***** finish message injection
             mov   r1, #0xF              // load bitmask 0b00001111
             and   r1, r3, r1            // mask low nibble out of msg[msg_idx-1]
             lsl   r1, r1, #4            // shift low nibble to high nibble
@@ -195,49 +193,59 @@ inject_done:                            // ***** finish message injection *****
 
 pad_loop:                               // ***** pad payload with alternating bytes *****
             cmp   r6, r0                // compare payload size with data capacity
-            bge   reed_sol              // msg_idx >= data capacity, pad finished
+            bge   pad_done              // msg_idx >= data capacity, pad finished
             mov   r2, #0xEC             // set pad byte
             strb  r2, [r7, r6]          // payload[msg_idx] = 0xEC
             add   r6, r6, #1            // msg_idx++
 
             cmp   r6, r0                // compare payload size with data capacity
-            bge   reed_sol              // msg_idx >= data capacity, pad finished
+            bge   pad_done              // msg_idx >= data capacity, pad finished
             mov   r2, #0x11             // set pad byte
             strb  r2, [r7, r6]          // payload[msg_idx] = 0x11
             add   r6, r6, #1            // msg_idx++
             b     pad_loop              // while (msg_idx < capacity)
 
-reed_sol:                               // ***** Reed-Solomon error correction *****
+pad_done:                               // ***** payload padding finished *****
+            ldr   r0, =payload          // pointer to payload
             mov   r4, #0                // i = 0
             ldr   r5, =g1b_cap          // pointer to group 1 blocks capacity (3Q = 2)
             ldrb  r5, [r5]              // load g1b_cap
+            ldr   r6, =g1bw_cap         // pointer to data words per block
+            ldrb  r6, [r6]              // load g1bw_cap
+            ldr   r7, =dw_block         // pointer to data block
+            mov   r9, #0                // data block offset
 
-            nop   // TODO: do i need a chunk of memory for blocks?  blocks: .space MAX_DATA_CAP
-            nop   // ---begin loop over g1b_cap ... while(i < g1b_cap)
+group_loop:                             // ***** loop over blocks in group *****
+            mov   r8, #0                // j = 0;
 
-            ldr   r0, =m_poly           // pointer to message polynomial
-            ldr   r2, =payload          // pointer to payload
-            ldr   r3, =g1bw_cap         // pointer to block data word size (3Q = 17)
-            ldrb  r3, [r3]              // load block data word size
-            bl    new_mpoly             // call subroutine to create message polynomial
+block_loop:                             // ***** Fill data block with subset of payload *****
+            add   r3, r9, r8            // x = j + offset
+            ldrb  r2, [r0, r3]          // get byte at offset
+            strb  r2, [r7, r8]          // block[j] = payload[x]
+            add   r8, r8, #1            // j++
+            cmp   r8, r6                //
+            blt   block_loop            // while (j < words per block)
+            
+            add   r9, r9, r8            // offset += data words per block
+            nop   // TODO: ^ r9 - 1 ?
 
-            ldr   r0, =g_poly           // pointer to generator polynomial
-            ldr   r2, =ecwb_cap         // pointer to ECW capacity
-            ldrb  r2, [r2]              // load error correction word capacity
-            bl    new_gpoly             // call subroutine to create generator polynomial
-
-            nop   // ---end loop over g1b_cap
+reed_sol:                               // ***** Reed-Solomon error correction *****
+            ldr   r0, =ecw_block        // pointer to error correction words block
+            mov   r1, r7                // pointer to data block
+            mov   r2, r6                // pointer to data words in each block
+            ldr   r3, =ecwb_cap         // pointer to error correction words per block
+            ldrb  r3, [r3]              // load ECW per block
+            bl    reed_solomon          // perform Reed-Solomon error correction
 
             nop   // TODO: interleave payload data and error correction data  (3Q - 70 words)
             nop   // TODO: add remainder bits (7 remainder bits)
 
-            nop   // I
-            nop   // want
-            nop   // to
-            nop   // die
-            nop   //
-            b     _end
+group_next:
+            add   r4, r4, #1            // i++
+            cmp   r4, r5                //
+            blt   group_loop            // while (i < blocks in group)
 
+            b     _end
 bad_eclvl:                              // ***** invalid error correction level *****
             ldr   r1, =err_01           // pointer to buffer address
             mov   r2, #err_01_len       // length

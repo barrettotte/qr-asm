@@ -1,20 +1,22 @@
-// Reed-Solomon error correction
+// Subroutines for performing Reed-Solomon error correction
 
             // exported subroutines
-            .global new_mpoly    // build polynomial from message
-            .global new_gpoly    // build generator polynomial
+            .global reed_solomon  // Reed-Solomon error correction
+            .global new_msg_poly  // build polynomial from message
+            .global new_gen_poly  // build generator polynomial
 
-            .global gf256_mul    // multiplication in Galois Field 2^8
-            .global gf256_inv    // inversion in Galois Field 2^8
-            .global gf256_div    // division in Galoi field 2^8
+            .global gf256_mul     // multiplication in Galois Field 2^8
+            .global gf256_inv     // inversion in Galois Field 2^8
+            .global gf256_div     // division in Galoi field 2^8
             
-            .global poly_clr     // reset a polynomial's data
-            .global poly_norm    // polynomial normalization
-            .global poly_add     // polynomial addition
-            .global poly_mul     // polynomial multiplication
+            .global poly_clr      // reset a polynomial's data
+            .global poly_norm     // polynomial normalization
+            .global poly_add      // polynomial addition
+            .global poly_mul      // polynomial multiplication
+            .global poly_rem      // get remainder of polynomial long division
 
             // constants
-            .equ POLY_SIZE, 128  // max terms in polynomial
+            .equ POLY_SIZE, 128   // max terms in a polynomial
 
             .data
 
@@ -87,8 +89,13 @@ gf256_log:  // Galois field 256 logarithm table
             .byte 116, 214, 244, 234, 168, 80, 88, 175    // 248 - 255
 
                                         // polynomials:
-gtmpA_poly: .space POLY_SIZE            //   scratch polynomial for generator polynomial create
-gtmpB_poly: .space POLY_SIZE            //   scratch polynomial for generator polynomial create
+msg_poly:   .space POLY_SIZE            //   message polynomial
+gen_poly:   .space POLY_SIZE            //   generator polynomial
+rem_poly:   .space POLY_SIZE            //   remainder polynomial used in reed-solomon subroutine
+tmp_mono:  .space POLY_SIZE             //   scratch monomial
+tmpA_poly:  .space POLY_SIZE            //   scratch polynomial
+tmpB_poly:  .space POLY_SIZE            //   scratch polynomial
+tmpC_poly:  .space POLY_SIZE            //   scratch polynomial
 prdA_poly:  .space POLY_SIZE            //   scratch polynomial for polynomial multiplication (operand A)
 prdB_poly:  .space POLY_SIZE            //   scratch polynomial for polynomial multiplication (operand B)
                                         //
@@ -131,7 +138,7 @@ _gf256m_done:
 
 gf256_inv:                              // ***** inverse in GF(256) *****
                                         // r0 - inverse of R2
-                                        // r1 - error if non-zero
+                                        // r1 - error status; error if non-zero
                                         // r2 - number to invert in GF(256)
                                         // r3 - unused
             push  {r4-r11, lr}          // save caller's vars + return address
@@ -155,7 +162,7 @@ _gf256i_done:
 
 gf256_div:                              // ***** division in GF(256) *****
                                         // r0 - quotient
-                                        // r1 - error if non-zero
+                                        // r1 - error status; error if non-zero
                                         // r2 - operand A
                                         // r3 - operand B
             push  {r4-r11, lr}          // save caller's vars + return address
@@ -314,12 +321,13 @@ _pmul_loop_a:
 _pmul_loop_b:
             add   r0, r8, #1            // x = i + 1
             add   r1, r9, #1            // y = j + 1
-
             ldrb  r10, [r2, r0]         // A.terms[x]
             ldrb  r11, [r3, r1]         // B.terms[y]
-            orr   r7, r10, r11          //
-            cmp   r7, #0                //
-            beq   _pmul_next_b          // if (A.terms[x] == 0 || B.terms[y] == 0)
+
+            cmp   r10, #0               // if (
+            beq   _pmul_next_b          //   A.terms[x] == 0 or
+            cmp   r11, #0               //   B.terms[y] == 0
+            beq   _pmul_next_b          // ) then skip this iteration
 
             push  {r2, r3}              // store pointers to polynomial operands
             add   r4, r0, r1            // x + y
@@ -360,7 +368,86 @@ _pmul_next_a:
             pop   {r4-r11, lr}          // restore caller's vars + return address
             bx    lr                    // return from subroutine
 
-new_gpoly:                              // ***** create generator polynomial *****
+poly_rem:                               // ***** Remainder of Polynomial Long Division *****
+                                        // r0 - pointer to remainder polynomial
+                                        // r1 - error status; error if non-zero
+                                        // r2 - pointer to numerator polynomial
+                                        // r3 - pointer denominator polynomial
+            push  {r4-r11, lr}          // save caller's vars + return address
+
+            mov   r1, #0                // init error
+            mov   r10, r3               // retain pointer to denominator
+            mov   r11, r0               // retain pointer to remainder polynomial
+            ldrb  r4, [r2]              // numerator terms
+            ldrb  r5, [r10]             // denominator terms
+            mov   r6, #0                // i = 0
+_prem_eq_loop:                          // check equality of operands
+            ldrb  r7, [r2]              // numerator[i]
+            ldrb  r8, [r10]             // denominator[i]
+            cmp   r8, r7                //
+            bne   _prem_neq             // numerator[i] != denominator[i]
+
+            add   r6, r6, #1            // i++
+            cmp   r6, r4                //
+            ble   _prem_eq_loop         // while (i <= numerator.length)
+            
+            b     _prem_err1            // error: numerator and denominator are equal
+
+_prem_neq:                              // numerator != denominator, all good
+            mov   r6, #0                // i = 0
+
+_prem_init_loop:                        // initialize remainder to numerator
+            ldrb  r7, [r2, r6]          // numerator[i]
+            strb  r7, [r11, r6]         // remainder[i] = numerator[i]
+            add   r6, r6, #1            // i++
+            cmp   r6, r4                //
+            ble   _prem_init_loop       // while (i <= numerator.length)
+
+            ldrb  r7, [r10]             // denominator.length
+            ldr   r5, =tmp_mono         // pointer to temporary monomial
+_prem_loop:
+            ldrb  r6, [r11]             // remainder.length
+            ldrb  r2, [r11, r6]         // remainder.terms[-1]; operand A
+            ldrb  r3, [r10, r7]         // denominator.terms[-1]; operand B
+            bl    gf256_div             // GF(256) divide; A / B
+
+            mov   r9, r0                // retain GF(256) quotient
+            cmp   r1, #0                //
+            bne   _prem_err2            // if (r1 != 0) then error occurred
+
+            mov   r0, r5                // pointer to tmp_mono
+            bl    poly_clr              // reset tmp_mono data
+            sub   r8, r6, r7            //
+            strb  r8, [r5]              // tmp_mono.length = rem.length - denom.length
+            add   r8, r8, #1            //
+            strb  r9, [r5, r8]          // set tmp_mono coefficient as GF(256) quotient
+
+            ldr   r8, =tmpC_poly        // pointer to temporary polynomial; divisor
+            mov   r0, r8                // store product in temporary polynomial
+            bl    poly_clr              // reset tmpC_poly
+            mov   r2, r10               // pointer to denominator; operand A
+            mov   r3, r5                // pointer to temp monomial; operand B
+            bl    poly_mul              // polynomial multiply; A * B
+
+            mov   r0, r11               // pointer to remainder polynomial; sum
+            mov   r2, r11               // pointer to remainder polynomial; operand A
+            mov   r3, r8                // pointer to temporary polynomial; operand B
+            bl    poly_add              // polynomial add; A + B
+
+            cmp   r6, r7                //
+            bge   _prem_loop            // while (remainder.length >= denominator.length)
+
+            bl    poly_norm             // normalize remainder polynomial
+            b     _prem_done            // return
+_prem_err1:
+            mov   r1, #1                // numerator == denominator
+_prem_err2:
+            mov   r1, #2                // error in gf256_div
+_prem_done:
+            pop   {r4-r11, lr}          // restore caller's vars + return address
+            bx    lr                    // return from subroutine
+
+new_gen_poly:                           // ***** create generator polynomial *****
                                         // r0 - pointer to store generator polynomial
                                         // r1 - unused
                                         // r2 - ECW per block = polynomial length
@@ -371,25 +458,25 @@ new_gpoly:                              // ***** create generator polynomial ***
             strb  r4, [r0]              // g_poly[0] = length
             strb  r4, [r0, #1]          // g_poly[1] = 1
 
-            ldr   r10, =gtmpA_poly      // pointer to scratch polynomial A
-            ldr   r5, =gtmpB_poly       // pointer to scratch polynomial B
+            ldr   r10, =tmpA_poly       // pointer to scratch polynomial A
+            ldr   r5, =tmpB_poly        // pointer to scratch polynomial B
             ldr   r7, =gf256_anti       // pointer to gf256_anti table
             mov   r9, r2                // retain ECW per block
 
             mov   r8, #0                // i = 0
 _gpoly_loop:                            // build generator polynomial
-            mov   r6, #2                // load gtmp_poly length
-            strb  r6, [r5]              // gtmpB_poly[0] = length
+            mov   r6, #2                // load tmp_poly length
+            strb  r6, [r5]              // tmpB_poly[0] = length
             
             ldrb  r6, [r7, r8]          // load first term from anti-logarithm table
-            strb  r6, [r5, #1]          // gtmpB_poly[1] = (gf256_anti[i])x^0
+            strb  r6, [r5, #1]          // tmpB_poly[1] = (gf256_anti[i])x^0
             mov   r6, #1                // load second term
-            strb  r6, [r5, #2]          // gtmpB_poly[2] = 1x^1
+            strb  r6, [r5, #2]          // tmpB_poly[2] = 1x^1
 
             mov   r6, #0                // j = 0
 _gpoly_copy:                            // copy current generator polynomial to scratch poly A
             ldrb  r4, [r0, r6]          // r4 = g_poly[j]
-            strb  r4, [r10, r6]         // gtmpA_poly[j] = g_poly[j]
+            strb  r4, [r10, r6]         // tmpA_poly[j] = g_poly[j]
             add   r6, r6, #1            // j++
             cmp   r6, r9                // compare index and ECW per block
             ble   _gpoly_copy           // while (j <= g_poly.length)
@@ -405,7 +492,7 @@ _gpoly_iter:
             pop   {r4-r11, lr}          // restore caller's vars + return address
             bx    lr                    // return from subroutine
 
-new_mpoly:                              // ***** create message polynomial *****
+new_msg_poly:                           // ***** create message polynomial *****
                                         // r0 - pointer to store message polynomial
                                         // r1 - unused
                                         // r2 - pointer to message
@@ -424,5 +511,82 @@ _mpoly_loop:                            // loop over message
             cmp   r5, r3                // compare m_poly index with message length
             ble   _mpoly_loop           // while (j <= msg_len)
 
+            pop   {r4-r11, lr}          // restore caller's vars + return address
+            bx    lr                    // return from subroutine
+
+reed_solomon:                           // ***** Reed-Solomon Error Correction *****
+                                        // r0 - pointer to error correction block
+                                        // r1 - pointer to data block
+                                        // r2 - data block capacity
+                                        // r3 - error correction words (ECW) capacity
+            push  {r4-r11, lr}          // save caller's vars + return address
+
+            ldr   r4, =msg_poly         // pointer to message polynomial
+            ldr   r5, =gen_poly         // pointer to generator polynomial
+            mov   r6, r2                // retain block capacity
+            mov   r7, r3                // retain ECW capacity
+            push  {r0}                  // store output/input pointers for later
+
+            mov   r0, r4                // pointer to message polynomial
+            bl    poly_clr              // reset message polynomial data
+            mov   r0, r5                // pointer to generator polynomial
+            bl    poly_clr              // reset generator polynomial data
+
+            mov   r0, r4                // pointer to message polynomial
+            mov   r2, r1                // pointer to data block
+            mov   r3, r6                // block capacity
+            bl    new_msg_poly          // create message polynomial
+
+            mov   r0, r5                // pointer to generator polynomial
+            mov   r2, r7                // use ECW capacity
+            bl    new_gen_poly          // create generator polynomial
+            push  {r1}                  // don't clobber pointer to data block
+
+            ldr   r8, =tmpB_poly        // pointer to temporary polynomial
+            mov   r0, r8                //
+            bl    poly_clr              // reset temp monomial data
+            add   r9, r7, #1            // terms = degree + 1
+            strb  r9, [r8]              // tmpB_poly = ECW capacity + 1
+            mov   r10, #1               // coefficient
+            strb  r10, [r8, r9]         // tmpB_poly = 1x^(ECW capacity)
+
+            ldr   r9, =tmpA_poly        // pointer to temp polynomial
+            mov   r0, r9                //
+            bl    poly_clr              // reset temp polynomial data
+            mov   r0, r9                // output to temp polynomial
+            mov   r2, r4                // pointer to message polynomial
+            mov   r3, r8                // pointer to temp monomial
+            bl    poly_mul              // perform polynomial multiplication
+            mov   r0, r8                // retain polynomial product
+
+            ldr   r10, =rem_poly        // pointer to remainder polynomial
+            mov   r0, r10               // 
+            bl    poly_clr              // reset remainder polynomial data
+            mov   r2, r9                // operand A; pointer to message polynomial
+            mov   r3, r5                // operand B; pointer to generator polynomial
+            bl    poly_rem              // find remainder polynomial of A / B
+
+            mov   r5, r0                // retain pointer to remainder polynomial
+            mov   r4, r1                // retain error status of poly_rem
+            pop   {r1}                  // restore data block pointer
+            pop   {r0}                  // restore output pointer
+            cmp   r4, #0                //
+            bne   _rs_err1              // if (r4 != 0) then error occurred in poly_rem
+
+            ldrb  r4, [r5]              // poly_rem.length
+            mov   r6, #0                // i = 0
+_rs_copy:                               // copy remainder polynomial terms to ECW block
+            add   r7, r6, #1            // x = i + 1
+            ldrb  r8, [r5, r7]          // rem_poly[x]
+            strb  r8, [r0, r6]          // ECW[i] = rem_poly[x]
+
+            add   r6, r6, #1            // i++
+            cmp   r6, r4                //
+            blt   _rs_copy              // while (i < poly_rem.length)
+
+            b     _rs_done              // return
+_rs_err1:
+            nop                         // error occurred: don't write to ECW block
+_rs_done:
             pop   {r4-r11, lr}          // restore caller's vars + return address
             bx    lr                    // return from subroutine

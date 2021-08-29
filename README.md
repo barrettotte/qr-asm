@@ -1,15 +1,15 @@
 # qr-asm
 
-Generate a QR code image from scratch with ARM assembly.
+Generate a QR code image from scratch with only ARM assembly.
 
-This was made to learn how QR codes work and to get better with ARM assembly.
+This was made to learn how QR codes work and to learn ARM assembly with a challenging project.
 
 ## Disclaimer
 
 If its not obvious I'm bad at assembly...I'm sure there are a disgusting amount of optimizations I could have done. 
 But, I tried to keep things simple so a dummy like me could understand this a year from now.
 
-Specifically, I didn't really leverage 32-bit word size or ARM's fancy optional shifting on each instruction.
+Specifically, I didn't really leverage 32-bit word sizes or ARM's fancy optional shifting on each instruction.
 
 ## QR Code Limitations
 
