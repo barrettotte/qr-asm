@@ -1,6 +1,6 @@
 // Subroutines for performing Reed-Solomon error correction
 
-            // exported subroutines
+            // exports
             .global reed_solomon  // Reed-Solomon error correction
             .global new_msg_poly  // build polynomial from message
             .global new_gen_poly  // build generator polynomial
@@ -102,7 +102,7 @@ sum_poly:   .space POLY_SIZE            //   scratch polynomial for polynomial a
                                         //
                                         //   struct polynomial {
                                         //     byte length;   // number of terms
-                                        //     byte terms[];  // array of terms;
+                                        //     byte terms[];  // array of terms
                                         //   }
                                         //
                                         //   example: [5, 3, 2, 0, 4, 9]
@@ -532,7 +532,7 @@ reed_solomon:                           // ***** Reed-Solomon Error Correction *
             ldr   r5, =gen_poly         // pointer to generator polynomial
             mov   r6, r2                // retain block capacity
             mov   r7, r3                // retain ECW capacity
-            push  {r0}                  // store output/input pointers for later
+            push  {r0}                  // store output pointer for later
 
             mov   r0, r4                // pointer to message polynomial
             bl    poly_clr              // reset message polynomial data

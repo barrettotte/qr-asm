@@ -1,4 +1,13 @@
 // Generate a byte-mode QR Code (v1-4)
+// 
+// Program Summary:
+//   - Get message, message length, and error correction level from stdin
+//   - Setup QR version, capacities, etc from program arguments
+//   - Pad message and split into groups/blocks based on config
+//   - Perform Reed-Solomon error correction on each block of data
+//   - Interleave data and error correction into a payload block
+//   - Build QR code matrix using payload block and QR code specifications
+//   - Output QR code matrix to image file
 
             .include "const.s"
 
@@ -6,33 +15,13 @@
 
             .data
 
-            // Error Messages
+            // error Messages
 err_01:     .asciz "Invalid error correction level.\n"
             .equ err_01_len, (.-err_01)
-
 err_02:     .asciz "Only QR versions 1-4 are supported.\n"
             .equ err_02_len, (.-err_02)
 
-            // Variables
-msg:        .asciz "https://github.com/barrettotte"
-            .equ msg_len, (.-msg)       // (30 chars) TODO: from cmd line args
-
-version:    .space 1                    // QR code version
-eclvl_idx:  .space 1                    // error correction level index (L,M,Q,H)
-eclvl:      .space 1                    // error correction level value (1,0,3,2)
-ecprop_idx: .space 1                    // error correction properties index
-
-data_cap:   .space 1                    // max capacity for data words
-ecwb_cap:   .space 1                    // error correction words per block
-g1b_cap:    .space 1                    // number of blocks in group 1
-g1bw_cap:   .space 1                    // data words in each group 1 block
-
-count_ind:  .space 1                    // character count indicator byte
-payload:    .space MAX_DATA_CAP         // payload of message and config
-ecw_block:  .space MAX_ECWB             // error correction words block
-dw_block:   .space MAX_DWB              // data word block
-
-            // Lookup Tables
+            // lookup tables
 tbl_eclvl:                              // error correction level lookup
             .byte 1, 0, 3, 2            // L, M, Q, H
 
@@ -43,10 +32,11 @@ tbl_version: //   L, M, Q, H            // version lookup
             .byte 78, 62, 46, 34        // v4
 
 tbl_ecprops:                            // error correction config lookup
-            //    0: data capacity in bytes
-            //    1: error correction words per block
-            //    2: blocks in group 1
-            //    3: data words in each group 1 block
+                                        //  0: data capacity in bytes
+                                        //  1: error correction words per block
+                                        //  2: blocks in group 1
+                                        //  3: data words in each group 1 block
+                                        //  *********
             .byte 19, 7, 1, 19          //  0: v1-L
             .byte 16, 10, 1, 16         //  1: v1-M
             .byte 13, 13, 1, 13         //  2: v1-Q
@@ -66,6 +56,26 @@ tbl_ecprops:                            // error correction config lookup
 
 tbl_rem:    .byte 0, 7, 7, 7            // remainder lookup (v1-4)
 
+            // variables
+msg:        .asciz "https://github.com/barrettotte"
+            .equ msg_len, (.-msg)       // (30 chars) TODO: from cmd line args
+
+version:    .space 1                    // QR code version
+eclvl_idx:  .space 1                    // error correction level index (L,M,Q,H)
+eclvl:      .space 1                    // error correction level value (1,0,3,2)
+ecprop_idx: .space 1                    // error correction properties index
+
+data_cap:   .space 1                    // max capacity for data words
+ecwb_cap:   .space 1                    // error correction words per block
+g1b_cap:    .space 1                    // number of blocks in group 1
+g1bw_cap:   .space 1                    // data words in each group 1 block
+
+count_ind:  .space 1                    // character count indicator byte
+data_words: .space MAX_DATA_CAP         // all data words
+dw_block:   .space MAX_DWB              // data word block
+ecw_blocks: .space MAX_ECWB*MAX_G1B     // all error correction blocks
+ecw_block:  .space MAX_ECWB             // error correction words block
+payload:    .space MAX_DATA_CAP         // payload of message and config
             .text
 
 _start:                                 // ***** program entry point *****
@@ -108,7 +118,7 @@ version_loop:                           // ***** search version lookup table ***
 
             add   r0, r0, #1            // version += 1
             add   r1, r1, #4            // i += 4
-            cmp   r0, r4                // compare version to max version
+            cmp   r0, r4                // check loop condition
             blt   version_loop          // while (version < MAX_VERSION)
             b     bad_version           // unsupported version encountered
 
@@ -145,7 +155,7 @@ set_ec_props:                           // ***** set error correction properties
             ldrb  r2, [r1, r0]          // load group 1 words per block from EC properties
             strb  r2, [r3]              // save group 1 words per block
 
-init_payload:                           // ***** init QR code payload *****
+init_dw:                                // ***** init data words *****
             mov   r1, #MODE             // load mode nibble
             lsl   r1, r1, #4            // shift nibble from low to high
             ldr   r2, =count_ind        // pointer to char count indicator
@@ -153,17 +163,16 @@ init_payload:                           // ***** init QR code payload *****
             lsr   r4, r3, #4            // shift char indicator high nibble to low nibble
             eor   r0, r1, r4            // combine mode nibble with count indicator high nibble
 
-            mov   r6, #0                // payload_idx = 0
-            ldr   r7, =payload          // pointer to payload
-            strb  r0, [r7, r6]          // payload[payload_idx] = mode nibble + count_ind[LOW]
-            add   r6, r6, #1            // payload_idx++
+            mov   r6, #0                // dw_idx = 0
+            ldr   r7, =data_words       // pointer to data words array
+            strb  r0, [r7, r6]          // data_words[dw_idx] = mode nibble + count_ind[LOW]
+            add   r6, r6, #1            // dw_idx++
 
             ldr   r2, =msg              // pointer to message
             mov   r5, #msg_len          // load msg_len for loop exit
             sub   r5, r5, #1            // msg_len --; null terminator  (TODO: remove ?)
             mov   r8, #0                // msg_idx = 0
-
-inject_msg:                             // ***** inject message into payload *****
+msg_loop:                               // ***** load message into data words array *****
             eor   r0, r0, r0            // reset scratch register for low nibble
             eor   r1, r1, r1            // reset scratch register for high nibble
 
@@ -174,60 +183,58 @@ inject_msg:                             // ***** inject message into payload ***
             ldrb  r3, [r2, r8]          // load msg[msg_idx]
             lsr   r4, r3, #4            // shift high nibble to low nibble
             eor   r0, r1, r4            // combine high nibble with low nibble
-            strb  r0, [r7, r6]          // store combined byte at payload[payload_idx]
+            strb  r0, [r7, r6]          // store combined byte at data_words[dw_idx]
 
             add   r8, r8, #1            // msg_idx++
-            add   r6, r6, #1            // payload_idx++
-            cmp   r8, r5                // compare msg_idx with msg_len
-            blt   inject_msg            // while (msg_idx < msg_len)
+            add   r6, r6, #1            // dw_idx++
+            cmp   r8, r5                // check loop condition
+            blt   msg_loop              // while (msg_idx < msg_len)
 
-inject_done:                            // ***** finish message injection
             mov   r1, #0xF              // load bitmask 0b00001111
             and   r1, r3, r1            // mask low nibble out of msg[msg_idx-1]
             lsl   r1, r1, #4            // shift low nibble to high nibble
             strb  r1, [r7, r6]          // store last char low nibble and zero nibble padding
-            add   r6, r6, #1            // payload_idx++
+            add   r6, r6, #1            // dw_idx++
 
             ldr   r2, =data_cap         // pointer to capacity
             ldrb  r0, [r2]              // load max capacity
-
-pad_loop:                               // ***** pad payload with alternating bytes *****
-            cmp   r6, r0                // compare payload size with data capacity
-            bge   pad_done              // msg_idx >= data capacity, pad finished
+pad_loop:                               // ***** pad data with alternating bytes *****
+            cmp   r6, r0                // check loop condition
+            bge   pad_done              // dw_idx >= data capacity, pad finished
             mov   r2, #0xEC             // set pad byte
-            strb  r2, [r7, r6]          // payload[msg_idx] = 0xEC
-            add   r6, r6, #1            // msg_idx++
+            strb  r2, [r7, r6]          // data_words[dw_idx] = 0xEC
+            add   r6, r6, #1            // dw_idx++
 
-            cmp   r6, r0                // compare payload size with data capacity
+            cmp   r6, r0                // check loop condition
             bge   pad_done              // msg_idx >= data capacity, pad finished
             mov   r2, #0x11             // set pad byte
-            strb  r2, [r7, r6]          // payload[msg_idx] = 0x11
+            strb  r2, [r7, r6]          // data_words[dw_idx] = 0x11
             add   r6, r6, #1            // msg_idx++
             b     pad_loop              // while (msg_idx < capacity)
 
-pad_done:                               // ***** payload padding finished *****
-            ldr   r0, =payload          // pointer to payload
-            mov   r4, #0                // i = 0
+pad_done:                               // ***** data padding finished *****
             ldr   r5, =g1b_cap          // pointer to group 1 blocks capacity (3Q = 2)
             ldrb  r5, [r5]              // load g1b_cap
             ldr   r6, =g1bw_cap         // pointer to data words per block
             ldrb  r6, [r6]              // load g1bw_cap
+
+            mov   r9, #0                // data word offset
+            mov   r10, #0               // ECW offset
+            mov   r4, #0                // i = 0
+block_loop:                             // ***** loop over data blocks in group *****
+            ldr   r0, =data_words       // pointer to data words array
             ldr   r7, =dw_block         // pointer to data block
-            mov   r9, #0                // data block offset
-
-group_loop:                             // ***** loop over blocks in group *****
             mov   r8, #0                // j = 0;
-
-block_loop:                             // ***** Fill data block with subset of payload *****
-            add   r3, r9, r8            // x = j + offset
+dwb_loop:                               // fill data block with subset of data words
+            add   r3, r9, r8            // x = j + dw offset
             ldrb  r2, [r0, r3]          // get byte at offset
-            strb  r2, [r7, r8]          // block[j] = payload[x]
+            strb  r2, [r7, r8]          // block[j] = data_words[x]
+dwb_next:                               // iterate to next word
             add   r8, r8, #1            // j++
-            cmp   r8, r6                //
-            blt   block_loop            // while (j < words per block)
-            
-            add   r9, r9, r8            // offset += data words per block
-            nop   // TODO: ^ r9 - 1 ?
+            cmp   r8, r6                // check loop condition
+            blt   dwb_loop              // while (j < words per block)
+
+            add   r9, r9, r8            // dw offset += data words per block
 
 reed_sol:                               // ***** Reed-Solomon error correction *****
             ldr   r0, =ecw_block        // pointer to error correction words block
@@ -235,17 +242,37 @@ reed_sol:                               // ***** Reed-Solomon error correction *
             mov   r2, r6                // pointer to data words in each block
             ldr   r3, =ecwb_cap         // pointer to error correction words per block
             ldrb  r3, [r3]              // load ECW per block
+            push  {r3}                  // save ECW per block; r3 gets clobbered
             bl    reed_solomon          // perform Reed-Solomon error correction
-            nop
+            pop   {r3}                  // restore ECW per block
 
+            ldr   r7, =ecw_blocks       // pointer to all error correction words
+            mov   r8, #0                // j = 0
+ecw_loop:                               // copy ECW block to main ECW block
+            ldrb  r11, [r0, r8]         // ecw_block[j]
+            add   r2, r8, r10           // x = j + ECW offset
+            strb  r11, [r7, r2]         // ecw_blocks[x] = ecw_block[j]
+ecw_next:                               // iterate to next word
+            add   r8, r8, #1            // j++
+            cmp   r8, r3                // check loop condition
+            blt   ecw_loop              // while (j < ECW block capacity)
+
+            add   r10, r10, r3          // ECW offset += ECW block capacity
+
+block_next:                             // iterate to next data block
+            add   r4, r4, #1            // i++
+            cmp   r4, r5                // check loop condition
+            blt   block_loop            // while (i < blocks in group)
+
+interleave:                             // ***** Interleave data and ECW blocks *****
             nop   // TODO: interleave payload data and error correction data  (3Q - 70 words)
             nop   // TODO: add remainder bits (7 remainder bits)
 
-group_next:
-            add   r4, r4, #1            // i++
-            cmp   r4, r5                //
-            blt   group_loop            // while (i < blocks in group)
 
+
+            nop  // ****************************************************************
+            nop  //     END OF PROGRAM !!!!  TODO: remove when finished developing
+            nop  // ****************************************************************
             b     _end
 bad_eclvl:                              // ***** invalid error correction level *****
             ldr   r1, =err_01           // pointer to buffer address

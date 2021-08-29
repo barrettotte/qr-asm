@@ -181,24 +181,45 @@ byte 1 = 18 terms, bytes 2-18 = terms array
 0x?????:        17      51      253
 ```
 
-### ECW Block
+### ECW Block 0
 
 Verify error correction word block filled correctly.
 
-**Note: This is for Block 0!**
-
-- `x/28ub &ecw_block`
+- `x/18ub &ecw_block`
 - `x/19ub &rem_poly`
 
 ```
 18 error correction words (max of 28).
 
-Note: we know the size of the block from the main program. (&ecwb_cap)
+0x?????:        253     51      17      168     54      42      245     204
+0x?????:        174     233     27      198     80      35      131     0
+0x?????:        242     202
+```
+
+### ECW Block Loop
+
+Verify ECW block is copied correctly to ECW array.
+
+- `x/18ub &ecw_block`
+- `x/36ub &ecw_blocks`
+
+
+```
+ECW block 0 copied; 18 words
 
 0x?????:        253     51      17      168     54      42      245     204
 0x?????:        174     233     27      198     80      35      131     0
 0x?????:        242     202     0       0       0       0       0       0
+0x?????:        0       0       0       0       0       0       0       0
 0x?????:        0       0       0       0
 ```
 
+```
+ECW block 1 copied; 36 words
 
+0x?????:        253     51      17      168     54      42      245     204
+0x?????:        174     233     27      198     80      35      131     0
+0x?????:        242     202     9       107     30      118     21      108
+0x?????:        227     15      117     139     15      178     142     79
+0x?????:        151     162     200     57
+```
