@@ -17,3 +17,7 @@
             .equ MAX_DWB, 80            // max data words per block (v4-L)
             .equ MAX_ECWB, 28           // max error correction words per block (v2-H)
             .equ MAX_PAYLOAD, 255       // max size of payload to transform into QR code
+            .equ MAX_QR_SIZE, 1096      // max modules in QR matrix; ((V*4)+21)^2, round next byte
+
+            // .equ MAX_QR_SIZE, 1120      // max modules in QR matrix; ((V*4)+21)^2 round to next word 
+            // .equ MAX_QR_WORDS, 35       // max words in QR matrix; MAX_QR_SIZE/32

@@ -71,13 +71,16 @@ g1b_cap:    .space 1                    // number of blocks in group 1
 g1bw_cap:   .space 1                    // data words in each group 1 block
 pyld_size:  .space 1                    // calculated size of payload
 pyld_bits:  .space 2                    // payload size in bits
-
+qr_width:   .space 1                    // width of QR matrix
 count_ind:  .space 1                    // character count indicator byte
+
 data_words: .space MAX_DATA_CAP         // all data words
 dw_block:   .space MAX_DWB              // data word block
 ecw_blocks: .space MAX_ECWB*MAX_G1B     // all error correction blocks
 ecw_block:  .space MAX_ECWB             // error correction words block
 payload:    .space MAX_PAYLOAD          // payload of data and error correction blocks
+qr_mat:     .space MAX_QR_SIZE          // QR code matrix
+
             .text
 
 _start:                                 // ***** program entry point *****
@@ -324,7 +327,17 @@ add_remainder:                          // ***** add remainder bits *****
             ldr   r5, =pyld_bits        // pointer to payload size in bits
             strh  r4, [r5]              // store calculated payload size
 
-            nop   // now we start building the QR matrix
+qr_init:                                // ***** QR matrix init *****
+            ldr   r2, =version          // pointer to version
+            ldrb  r2, [r2]              // load version
+            lsl   r2, r2, #2            // version * 4
+            add   r2, r2, #21           // (version * 4) + 21
+            ldr   r3, =qr_width         // pointer to QR code width
+            strb  r2, [r3]              // save QR width
+            
+            
+
+            nop   // TODO:
 
             nop  // ****************************************************************
             nop  //     END OF PROGRAM !!!!  TODO: remove when finished developing

@@ -224,7 +224,7 @@ ECW block 1 copied; 36 words
 0x?????:        151     162     200     57
 ```
 
-## Interleave Data and Error Correction Blocks
+### Interleave Data and Error Correction Blocks
 
 - `x/70ub &payload`
 - `x/36ub &ecw_blocks`
@@ -245,5 +245,9 @@ interleaved data; 70 words = 2(18 + 17)
 ```
 
 Add remainder, verify bit size - `x/1uh &pyld_bits` = 567 = (70 * 8) + 7
+
+## Build QR Code Matrix
+
+`x/1ub &qr_width` = 29 ... used for 29x29 QR code matrix
 
 
