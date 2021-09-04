@@ -16,7 +16,7 @@
             .global poly_rem      // get remainder of polynomial long division
 
             // constants
-            .equ POLY_SIZE, 128   // max terms in a polynomial
+            .equ  POLY_SIZE, 128  // max terms in a polynomial
 
             .data
 

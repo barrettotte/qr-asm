@@ -41,3 +41,5 @@ For sanity checking this ugly thing, see my notes in [docs/3Q-test.md](docs/3Q-t
 - [QR Code Tutorial](https://www.thonky.com/qr-code-tutorial/)
 - [Reed Solomon Codes for Coders](https://en.wikiversity.org/wiki/Reed%E2%80%93Solomon_codes_for_coders)
 - [GDB Command Reference](https://visualgdb.com/gdbreference/commands/x)
+- [PBM File Description](https://oceancolor.gsfc.nasa.gov/staff/norman/seawifs_image_cookbook/faux_shuttle/pbm.html)
+- [Netpbm Wiki](https://en.wikipedia.org/wiki/Netpbm)

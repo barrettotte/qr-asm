@@ -248,6 +248,34 @@ Add remainder, verify bit size - `x/1uh &pyld_bits` = 567 = (70 * 8) + 7
 
 ## Build QR Code Matrix
 
+### PBM File Header
+
 `x/1ub &qr_width` = 29 ... used for 29x29 QR code matrix
 
+Verify PBM width converted to ASCII - `x/11ub &ascii_buff`
 
+```
+10 bytes representing a ten digit ASCII string, 11th byte for null terminator.
+
+50 = '2'; 57 = '9'; 48='0' => "0000000029"
+
+0x?????:        48      48      48      48      48      48      48      48
+0x?????:        50      57      0
+```
+
+Verify PBM length converted to ASCII - `x/11ub &ascii_buff`
+```
+10 bytes representing a ten digit ASCII string, 11th byte for null terminator.
+
+50 = '2'; 57 = '9'; 48='0' => "0000000029"
+
+0x?????:        48      48      48      48      48      48      48      48
+0x?????:        50      57      0
+```
+
+Verify PBM header 2nd line - `x/6ub &line_buff`
+```
+6 bytes representing "29 29\n"
+
+0x?????:        50      57      32      50      57      10
+```

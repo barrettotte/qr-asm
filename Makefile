@@ -24,6 +24,7 @@ link:
 clean:
 			@mkdir -p $(OUT)
 			rm -f *.o $(OUT)/$(BIN)
+			rm -f qrcode.pbm
 
 qemu:
 			qemu-arm -singlestep -g 1234 $(OUT)/$(BIN)

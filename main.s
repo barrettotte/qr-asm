@@ -13,13 +13,25 @@
 
             .global _start
 
+            // constants
+            .equ  MODE, 0b0100          // byte encoding mode
+            .equ  MAX_VERSION, 3        // max version supported (1-4); zero indexed
+            .equ  MAX_DATA_CAP, 80      // max data capacity (message) (v4-L)
+            .equ  MAX_G1B, 4            // max blocks in group 1 (v4-H)
+            .equ  MAX_DWB, 80           // max data words per block (v4-L)
+            .equ  MAX_ECWB, 28          // max error correction words per block (v2-H)
+            .equ  MAX_PAYLOAD, 255      // max size of payload to transform into QR code
+            .equ  MAX_QR_SIZE, 1096     // max modules in QR matrix; ((V*4)+21)^2, round next byte
+            // .equ  MAX_QR_SIZE, 1120  // max modules in QR matrix; ((V*4)+21)^2 round to next word 
+            // .equ  MAX_QR_WORDS, 35   // max words in QR matrix; MAX_QR_SIZE/32
+
             .data
 
             // error Messages
 err_01:     .asciz "Invalid error correction level.\n"
-            .equ err_01_len, (.-err_01)
+            .equ   err_01_len, (.-err_01)
 err_02:     .asciz "Only QR versions 1-4 are supported.\n"
-            .equ err_02_len, (.-err_02)
+            .equ   err_02_len, (.-err_02)
 
             // lookup tables
 tbl_eclvl:                              // error correction level lookup
@@ -59,6 +71,9 @@ tbl_rem:    .byte 0, 7, 7, 7            // remainder lookup (v1-4)
             // variables
 msg:        .asciz "https://github.com/barrettotte"
             .equ msg_len, (.-msg)       // (30 chars) TODO: from cmd line args
+
+out_file:   .asciz "qrcode.pbm"         // (10 chars)
+            .equ outf_len, (.-out_file)
 
 version:    .space 1                    // QR code version (zero indexed)
 eclvl_idx:  .space 1                    // error correction level index (L,M,Q,H)
@@ -335,7 +350,13 @@ qr_init:                                // ***** QR matrix init *****
             ldr   r3, =qr_width         // pointer to QR code width
             strb  r2, [r3]              // save QR width
             
-            
+            ldr   r0, =qr_mat           // pointer to QR matrix
+            ldr   r1, =out_file         // pointer to PBM file name
+            mov   r3, r2                // width of PBM file; r3 = length
+            mov   r5, #outf_len         // load out file length
+            push  {r5}                  // send out file length as fifth argument
+            bl    pbm_write             // create new PBM file from QR matrix
+            pop   {r5}                  // clear stack argument
 
             nop   // TODO:
 
