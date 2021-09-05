@@ -13,7 +13,7 @@
             // internal:
             //
             // add_square   - add a square to matrix
-            // add_timepats - add horizontal and vertical timing patterns
+            // add_timing   - add horizontal and vertical timing patterns
             // add_finder   - add a finder to matrix
             // add_aligns   - add alignment patterns and dark module to matrix
 
@@ -82,25 +82,24 @@ _asq_x_next:
             pop   {r4-r11, lr}             // restore caller's vars + return address
             bx    lr                       // return from subroutine
 
-add_timepats:                              // ***** Add timing patterns to QR matrix *****
+add_timing:                                // ***** Add timing patterns to QR matrix *****
                                            // r0 - pointer to QR matrix
-                                           // r1 - unused; clobbered
+                                           // r1 - unused
                                            // r2 - QR width
-                                           // r3 - QR version
+                                           // r3 - unused
             push  {r4-r11, lr}             // save caller's vars + return address
 
             mov   r4, #1                   // is_dark = true
             mov   r5, #0                   // i = 0
             mov   r7, #6                   // timing offset
-_at_tpat_loop:                             //
-            
+_at_loop:
             cmp   r4, #1                   // is_dark?
-            beq   _at_tpat_dark            // use dark module
+            beq   _at_dark                 // use dark module
             mov   r6, $MOD_RLT             // set light module ASCII
-            b     _at_tpat_mod             // skip over next 2 lines
-_at_tpat_dark:
+            b     _at_set                  // skip over next 2 lines
+_at_dark:
             mov   r6, $MOD_RDK             // set dark module ASCII
-_at_tpat_mod:
+_at_set:
             umull r9, r10, r2, r5          // x = i * qr_size
             add   r9, r9, r7               // x = (i * qr_size) + offset
             strb  r6, [r0, r9]             // qr_mat[x] = r6; horizontal timing
@@ -108,11 +107,67 @@ _at_tpat_mod:
             umull r9, r10, r7, r2          // x = offset * qr_size
             add   r9, r9, r5               // x = (offset * qr_size) + i
             strb  r6, [r0, r9]             // qr_mat[x] = r6; vertical timing
-_at_tpat_next:
+
             eor   r4, r4, #1               // is_dark = !is_dark
             add   r5, r5, #1               // i++
             cmp   r5, r2                   // check loop condition
-            blt   _at_tpat_loop            // while (i < qr_width)
+            blt   _at_loop                 // while (i < qr_width)
+
+            pop   {r4-r11, lr}             // restore caller's vars + return address
+            bx    lr                       // return from subroutine
+
+add_finder:                                // ***** Add a finder pattern to QR matrix *****
+                                           // r0 - pointer to QR matrix
+                                           // r1 - unused
+                                           // r2 - QR width
+                                           // r3 - pos = [?, ?, x, y]
+            push  {r4-r11, lr}             // save caller's vars + return address
+
+            and   r4, r3, #MASK_B1         // get x position
+            lsr   r4, r4, #8               // shift over 1 byte
+            and   r5, r3, #MASK_B0         // get y position
+            mov   r8, #9                   // init width constant
+
+_af_sep:                                   // add finder's separator square
+            eor   r1, r1, r1               // reset sq_args
+            sub   r6, r4, #1               // x - 1
+            orr   r1, r1, r6, lsl #24      // set x position
+            sub   r6, r5, #1               // y - 1
+            orr   r1, r1, r6, lsl #16      // set y position
+            orr   r1, r1, r8, lsl #8       // set square width
+            orr   r1, r1, #MOD_RLT         // set fill character
+            bl    add_square               // add square to QR matrix
+            
+_af_out:                                   // add finder's outer square
+            eor   r1, r1, r1               // reset sq_args
+            orr   r1, r1, r4, lsl #24      // set x position
+            orr   r1, r1, r5, lsl #16      // set y position
+            sub   r8, r8, #2               // width -= 2
+            orr   r1, r1, r8, lsl #8       // set square width
+            orr   r1, r1, #MOD_RDK         // set fill character
+            bl    add_square               // add square to QR matrix
+
+_af_in:                                    // add finder's inner square
+            eor   r1, r1, r1               // reset sq_args
+            add   r6, r4, #1               // x + 1
+            orr   r1, r1, r6, lsl #24      // set x position
+            add   r6, r5, #1               // y + 1
+            orr   r1, r1, r6, lsl #16      // set y position
+            sub   r8, r8, #2               // width -= 2
+            orr   r1, r1, r8, lsl #8       // set square width
+            orr   r1, r1, #MOD_RLT         // set fill character
+            bl    add_square               // add square to QR matrix
+
+_af_ctr:                                   // add finder's center square
+            eor   r1, r1, r1               // reset sq_args
+            add   r6, r4, #2               // x + 2
+            orr   r1, r1, r6, lsl #24      // set x position
+            add   r6, r5, #2               // y + 2
+            orr   r1, r1, r6, lsl #16      // set y position
+            sub   r8, r8, #2               // width -= 2
+            orr   r1, r1, r8, lsl #8       // set square width
+            orr   r1, r1, #MOD_RDK         // set fill character
+            bl    add_square               // add square to QR matrix
 
             pop   {r4-r11, lr}             // restore caller's vars + return address
             bx    lr                       // return from subroutine
@@ -127,7 +182,9 @@ qr_reserved:                               // ***** Add reserved areas to QR mat
             mov   r5, #9                   // set square width
             mov   r6, #MOD_RLT             // set fill byte
             mov   r1, #0                   // reset unused arg
+            push  {r3}                     // save version for later
 
+_qrr_sq:                                   // add reserved squares to QR matrix
             mov   r4, #0                   // set x,y; sq_args[3] = 0, sq_args[2] = 0
             orr   r1, r1, r5, lsl #8       // set square width; sq_args[1]
             orr   r1, r1, r6               // set fill byte; sq_args[0]
@@ -147,7 +204,22 @@ qr_reserved:                               // ***** Add reserved areas to QR mat
             orr   r1, r1, r6               // set fill byte
             bl    add_square               // add bottom left square to QR matrix
 
-            bl    add_timepats             // add horizontal and vertical timing patterns
+_qrr_time:                                 // add timing patterns to QR matrix
+            bl    add_timing               // add horizontal and vertical timing patterns
+
+_qrr_find:                                 // add finding patterns to QR matrix
+            mov   r3, #0                   // pos = (0, 0)
+            bl    add_finder               // add finder pattern at x,y
+
+            sub   r6, r2, #7               // qr_size - 7
+            orr   r3, r3, r6               // pos = (0, qr_size-7)
+            bl    add_finder               // add finder pattern at x,y
+
+            eor   r3, r3, r3               // reset pos
+            orr   r3, r3, r6, lsl #8       // pos = (qr_size-7, 0)
+            bl    add_finder               // add finder pattern at x,y
+
+            pop   {r3}                     // restore QR version
 
             pop   {r4-r11, lr}             // restore caller's vars + return address
             bx    lr                       // return from subroutine
