@@ -15,7 +15,6 @@
             // add_square   - add a square to matrix
             // add_timing   - add horizontal and vertical timing patterns
             // add_finder   - add a finder to matrix
-            // add_aligns   - add alignment patterns and dark module to matrix
 
             // constants
             .equ  MOD_DLT, 0x30            // Data light module;     ASCII '0'
@@ -30,6 +29,8 @@
             .equ MASK_B3, 0xff000000       // 32-bit mask for byte 3
 
             .data
+
+tbl_align:  .byte 0, 18, 22, 26            // alignment pattern; v1-v4
 
             .text
 
@@ -172,6 +173,48 @@ _af_ctr:                                   // add finder's center square
             pop   {r4-r11, lr}             // restore caller's vars + return address
             bx    lr                       // return from subroutine
 
+add_align:                                 // ***** add alignment patterns to QR matrix *****
+                                           // r0 - pointer to QR matrix
+                                           // r1 - unused; clobbered
+                                           // r2 - QR width
+                                           // r3 - QR version
+            push  {r4-r11, lr}             // save caller's vars + return address
+
+            cmp   r3, #0                   // check version
+            beq   _aa_done                 // version 1 has no alignment patterns
+            ldr   r6, =tbl_align           // pointer to alignment pattern table
+            ldrb  r6, [r6, r3]             // load alignment constant
+
+            mov   r5, #1                   // is_dark = true
+            mov   r7, #5                   // init width
+            sub   r8, r6, #2               // init offset
+            mov   r6, #0                   // i = 0
+_aa_loop:
+            eor   r1, r1, r1               // reset sq_args
+            orr   r1, r1, r8, lsl #24      // set x position
+            orr   r1, r1, r8, lsl #16      // set y position
+            orr   r1, r1, r7, lsl #8       // set square width
+
+            cmp   r5, #1                   // is_dark?
+            beq   _aa_dkmod                // use dark module
+            orr   r1, r1, #MOD_RLT         // set fill byte to light
+            b     _aa_square               // skip next two lines 
+_aa_dkmod:
+            orr   r1, r1, #MOD_RDK         // set fill byte
+_aa_square:
+            bl    add_square               // add alignment at x,y
+            add   r8, r8, #1               // offset++
+            sub   r7, r7, #2               // width -= 2
+            eor   r5, r5, #1               // is_dark = !is_dark
+
+            add   r6, r6, #1               // i++
+            cmp   r6, #3                   // check loop condition
+            blt   _aa_loop                 // while (i < 3)
+
+_aa_done:
+            pop   {r4-r11, lr}             // restore caller's vars + return address
+            bx    lr                       // return from subroutine
+
 qr_reserved:                               // ***** Add reserved areas to QR matrix *****
                                            // r0 - pointer to QR matrix
                                            // r1 - unused; clobbered
@@ -179,10 +222,10 @@ qr_reserved:                               // ***** Add reserved areas to QR mat
                                            // r3 - QR version
             push  {r4-r11, lr}             // save caller's vars + return address
 
+            mov   r11, r3                  // retain QR version
             mov   r5, #9                   // set square width
             mov   r6, #MOD_RLT             // set fill byte
             mov   r1, #0                   // reset unused arg
-            push  {r3}                     // save version for later
 
 _qrr_sq:                                   // add reserved squares to QR matrix
             mov   r4, #0                   // set x,y; sq_args[3] = 0, sq_args[2] = 0
@@ -218,8 +261,12 @@ _qrr_find:                                 // add finding patterns to QR matrix
             eor   r3, r3, r3               // reset pos
             orr   r3, r3, r6, lsl #8       // pos = (qr_size-7, 0)
             bl    add_finder               // add finder pattern at x,y
+_qrr_align:
+            mov   r3, r11                  // load QR version
+            bl    add_align                // add alignment patterns to QR matrix
 
-            pop   {r3}                     // restore QR version
+_qrr_darkmod:                              // add dark module to QR matrix
+            nop @ TODO:
 
             pop   {r4-r11, lr}             // restore caller's vars + return address
             bx    lr                       // return from subroutine
