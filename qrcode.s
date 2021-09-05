@@ -4,17 +4,18 @@
 
             // exports
             .global qr_reserved         // add reserved areas to QR matrix
+            .global qr_normalize        // normalize QR matrix to ['0','1']
+
             @ TODO: .global qr_zigzag           // "zigzag" payload into QR matrix
             @ TODO: .global qr_mask0            // apply mask 0 to QR matrix
             @ TODO: .global qr_fmtbits          // add format bits to QR matrix
-            @ TODO: .global qr_normalize        // normalize QR matrix to ['0', '1']
             @ TODO: .global qr_quiet            // add quiet zone to QR matrix
-            
-            // internal:
-            //
-            // add_square   - add a square to matrix
-            // add_timing   - add horizontal and vertical timing patterns
-            // add_finder   - add a finder to matrix
+
+            // internal subroutines
+            //   add_square   - add a square to QR matrix
+            //   add_timing   - add horizontal and vertical timing patterns to QR matrix
+            //   add_finder   - add a finder to QR matrix
+            //   add_align    - add alignment pattern to QR matrix
 
             // constants
             .equ  MOD_DLT, 0x30            // Data light module;     ASCII '0'
@@ -260,6 +261,48 @@ _qrr_darkmod:                              // add dark module to QR matrix
             add   r4, r4, #8               // (((4 * (v + 1)) + 9) * qr_width) + 8
             mov   r5, #MOD_RDK             // load dark module
             strb  r5, [r0, r4]             // set dark module at calculated index
+
+            pop   {r4-r11, lr}             // restore caller's vars + return address
+            bx    lr                       // return from subroutine
+
+qr_normalize:                              // ***** Normalize QR matrix to ['0','1'] *****
+                                           // r0 - pointer to QR matrix
+                                           // r1 - unused
+                                           // r2 - QR width
+                                           // r3 - unused
+            push  {r4-r11, lr}             // save caller's vars + return address
+
+            mov   r9, #0                   // qr_idx = 0
+            mov   r4, #0                   // i = 0
+_qrn_x_loop:
+            mov   r5, #0                   // j = 0
+_qrn_y_loop:
+            ldrb  r6, [r0, r9]             // qr_mat[qr_idx]
+
+            cmp   r6, #MOD_EMP             // check if reserved empty
+            beq   _qrn_ltmod               // normalize to light
+            cmp   r6, #MOD_RLT             // check if reserved light
+            beq   _qrn_ltmod               // normalize to light
+            cmp   r6, #MOD_RDK             // check if reserved dark
+            beq   _qrn_dkmod               // normalize to dark
+
+            b     _qrn_y_next              // already normalized; iterate
+_qrn_dkmod:
+            mov   r6, #MOD_DDK             // dark module
+            strb  r6, [r0, r9]             // store normalized module
+            b     _qrn_y_next              // iterate
+_qrn_ltmod:
+            mov   r6, #MOD_DLT             // light module
+            strb  r6, [r0, r9]             // store normalized module
+_qrn_y_next:
+            add   r9, r9, #1               // qr_idx++
+            add   r5, r5, #1               // j++
+            cmp   r5, r2                   // check loop condition
+            blt   _qrn_y_loop              // while (j < qr_width)
+_qrn_x_next:
+            add   r4, r4, #1               // i++
+            cmp   r4, r2                   // check loop condition
+            blt   _qrn_x_loop              // while (i < qr_width)
 
             pop   {r4-r11, lr}             // restore caller's vars + return address
             bx    lr                       // return from subroutine

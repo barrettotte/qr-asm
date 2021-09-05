@@ -359,6 +359,8 @@ qr_init:                                   // ***** QR matrix init *****
             ldr   r1, =out_file            // pointer to PBM file name
             ldr   r2, =qr_width            // pointer to QR code width
             ldrb  r2, [r2]                 // load width
+            bl    qr_normalize             // normalize QR matrix to ['0','1']
+
             mov   r3, r2                   // use width for PBM width + length (square)
             bl    pbm_write                // create new PBM file from QR matrix
 
