@@ -21,11 +21,7 @@ pbm_write:                                 // ***** Write memory to new PBM file
                                            // r1 - pointer to output file name
                                            // r2 - width
                                            // r3 - height
-                                           // TODO: ? r4 - output file name length (pass via stack)
-                                           // TODO: ? r5 - memory block length 
             push  {r4-r11, lr}             // save caller's vars + return address
-            @ ldr   r4, [sp, #(0+36)]      // load 5th arg from stack; (9 regs * 4 = 36 bytes)
-            @ ldr   r5, [sp, #(4+36)]      // load 6th arg from stack
 
             push  {r1}                     // save output file name pointer
             push  {r0}                     // save memory block pointer
@@ -96,25 +92,44 @@ _pbm_header_done:
             mov   r2, r5                   // load line buffer length
             svc   #0                       // invoke syscall
 _pbm_body:
+            pop   {r0}                     // restore memory block pointer
+            mov   r9, r0                   // retain pointer
+            push  {r0}                     // save memory block pointer again
+            mov   r1, #0                   // block_idx = 0
             mov   r2, #0                   // i = 0
 _pbm_loop_x:                               // loop over rows
+            mov   r4, #0                   // line_idx = 0
             mov   r3, #0                   // j = 0
 _pbm_loop_y:                               // loop over cols
-            nop
-            // calc byte index needed in memory block
-            // store ASCII byte in line buffer
-            // store ASCII space in line buffer
-            nop
+            
+            ldrb  r5, [r9, r1]             // block[block_idx]
+        
+            strb  r5, [r8, r4]             // line[line_idx] = block[block_idx]
+            add   r4, r4, #1               // line_idx++
+            add   r1, r1, #1               // block_idx++
+            
+            mov   r5, #ASCII_SPACE         // load space
+            strb  r5, [r8, r4]             // line[line_idx] = ' '
+            add   r4, r4, #1               // line_idx++
 _pbm_next_y:                               // next col
             add   r3, r3, #1               // j++
             cmp   r3, r10                  // check loop condition
             blt   _pbm_loop_y              // while (j < width)
 _pbm_next_x:                               // next row
-            // TODO: add newline
-            // TODO: write line buffer to file
+            mov   r5, #ASCII_LF            // load line feed
+            strb  r5, [r8, r4]             // line[line_idx] = '\n'
+            add   r4, r4, #1               // line_idx++
+
+            push  {r1-r2}                  // save indices
+            mov   r7, #WRITE               // load syscall number
+            mov   r0, r6                   // load file descriptor
+            mov   r1, r8                   // load pointer to line buffer
+            mov   r2, r4                   // load buffer size
+            svc   #0                       // invoke syscall
+            pop   {r1-r2}                  // restore indices
 
             add   r2, r2, #1               // i++
-            cmp   r3, r11                  // check loop condition
+            cmp   r2, r11                  // check loop condition
             blt   _pbm_loop_x              // while (i < length)
 _pbm_done:
             mov   r7, #CLOSE               // load syscall number

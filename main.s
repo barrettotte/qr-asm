@@ -71,7 +71,6 @@ msg:        .asciz "https://github.com/barrettotte"
             .equ msg_len, (.-msg)          // (30 chars) TODO: from cmd line args
 
 out_file:   .asciz "qrcode.pbm"            // (10 chars)
-            .equ outf_len, (.-out_file)
 
 version:    .space 1                       // QR code version (zero indexed)
 eclvl_idx:  .space 1                       // error correction level index (L,M,Q,H)
@@ -92,7 +91,7 @@ dw_block:   .space MAX_DWB                 // data word block
 ecw_blocks: .space MAX_ECWB*MAX_G1B        // all error correction blocks
 ecw_block:  .space MAX_ECWB                // error correction words block
 payload:    .space MAX_PAYLOAD             // payload of data and error correction blocks
-qr_mat:     .space MAX_QR_SIZE ASCII_ZERO  // QR code matrix; ASCII bytes
+qr_mat:     .space MAX_QR_SIZE, ASCII_ZERO // QR code matrix; ASCII bytes
 
             .text
 
@@ -331,14 +330,14 @@ add_remainder:                             // ***** add remainder bits *****
             ldr   r9, =pyld_size           // pointer to payload size  TODO: needed?
             strb  r4, [r9]                 // store size of payload    TODO: needed?
 
-            lsl   r4, r4, #3               // convert size to bits; 2^3 = 8
-            ldr   r5, =tbl_rem             // pointer to remainder table
-            ldr   r6, =version             // pointer to version
-            ldrb  r6, [r6]                 // load version
-            ldrb  r6, [r5, r6]             // tbl_rem[version] = remainder
-            add   r4, r4, r6               // bits = (payload bytes * 8) + remainder
-            ldr   r5, =pyld_bits           // pointer to payload size in bits
-            strh  r4, [r5]                 // store calculated payload size
+            lsl   r4, r4, #3               // convert size to bits; 2^3 = 8            // TODO: needed?
+            ldr   r5, =tbl_rem             // pointer to remainder table               // TODO: needed?
+            ldr   r6, =version             // pointer to version                       // TODO: needed?
+            ldrb  r6, [r6]                 // load version                             // TODO: needed?
+            ldrb  r6, [r5, r6]             // tbl_rem[version] = remainder             // TODO: needed?
+            add   r4, r4, r6               // bits = (payload bytes * 8) + remainder   // TODO: needed?
+            ldr   r5, =pyld_bits           // pointer to payload size in bits          // TODO: needed?
+            strh  r4, [r5]                 // store calculated payload size            // TODO: needed?
 
 qr_init:                                   // ***** QR matrix init *****
             ldr   r2, =version             // pointer to version
@@ -348,17 +347,14 @@ qr_init:                                   // ***** QR matrix init *****
             ldr   r3, =qr_width            // pointer to QR code width
             strb  r2, [r3]                 // save QR width
 
+            nop
             // TODO: convert QR matrix bytes to ASCII
+            nop
 
             ldr   r0, =qr_mat              // pointer to QR matrix
             ldr   r1, =out_file            // pointer to PBM file name
             mov   r3, r2                   // width of PBM file; r3 = length
-            mov   r5, #outf_len            // load out file length
-            push  {r5}                     // send out file length as fifth argument
             bl    pbm_write                // create new PBM file from QR matrix
-            pop   {r5}                     // clear stack argument
-
-            nop   // TODO:
 
             nop  // ****************************************************************
             nop  //     END OF PROGRAM !!!!  TODO: remove when finished developing
