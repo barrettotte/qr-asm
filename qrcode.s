@@ -252,7 +252,14 @@ _qrr_align:
             bl    add_align                // add alignment patterns to QR matrix
 
 _qrr_darkmod:                              // add dark module to QR matrix
-            nop @ TODO:
+            mov   r4, #4                   //
+            add   r5, r11, #1              // version + 1
+            umull r8, r7, r4, r5           // 4 * (version + 1)
+            add   r8, r8, #9               // (4 * (v + 1)) + 9
+            umull r4, r7, r8, r2           // ((4 * (v + 1)) + 9) * qr_width
+            add   r4, r4, #8               // (((4 * (v + 1)) + 9) * qr_width) + 8
+            mov   r5, #MOD_RDK             // load dark module
+            strb  r5, [r0, r4]             // set dark module at calculated index
 
             pop   {r4-r11, lr}             // restore caller's vars + return address
             bx    lr                       // return from subroutine
