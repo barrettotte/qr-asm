@@ -9,7 +9,6 @@
             .data
 
 aui2d_buf:  .space  10+1                   // 2^32 capacity; 10 digits (+1 for terminator)
-aub2b_buf:  .space  8+1                    // 8-bit; 8 binary digits (+1 for terminator)
 one_tenth:  .word   0x1999999A             // ~((2^32)/10)+1; for quick div by 10
 
             .text
@@ -21,25 +20,26 @@ ascii_ubyte2bin:                           // ***** Convert ubyte to ASCII binar
                                            // r3 - unused
             push  {r4-r11, lr}             // save caller's vars + return address
 
-            ldr   r9, =aub2b_buf           // pointer to ASCII buffer
-            mov   r4, #8                   // i = 8
+            mov   r4, #8                   // size = 8
             mov   r5, #1                   // mask = 1
+            mov   r8, #0                   // i = 0
 _aub2b_digit:                              // loop over each binary digit
             and   r6, r2, r5               // mask ubyte to get single digit
             cmp   r6, r5                   // compare mask with
             beq   _aub2b_one               // if bit is set, skip over next 2 lines
             mov   r7, #ASCII_ZERO          // c = '0'
-            b     _aub2b_next              // 
+            b     _aub2b_next              // iterate
 _aub2b_one:
             mov   r7, #ASCII_ONE           // c = '1'
 _aub2b_next:
-            sub   r6, r4, r5               // x = 8 - i
-            sub   r6, r6, #1               // use zero indexing
-            strb  r7, [r9, r5]             // ascii[8-i-1] = c
-
+            sub   r6, r4, r8               // x = 8 - i
+            sub   r6, r6, #1               // offset 1 (null terminator)
+            strb  r7, [r0, r6]             // ascii[8-i-1] = c
             lsl   r5, r5, #1               // shift mask bit
-            cmp   r5, r4                   // check loop condition
-            blt   _aub2b_digit             // while (mask < 8)
+
+            add   r8, r8, #1               // i++
+            cmp   r8, r4                   // check loop condition
+            blt   _aub2b_digit             // while (i < 8)
 
 _aub2b_done:
             pop   {r4-r11, lr}             // restore caller's vars + return address

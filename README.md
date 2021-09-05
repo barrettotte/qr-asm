@@ -8,8 +8,10 @@ This was made to learn how QR codes work and to learn ARM assembly with a challe
 
 If its not obvious I'm bad at assembly...I'm sure there are a disgusting amount of optimizations I could have done. 
 But, I tried to keep things simple so a dummy like me could understand this a year from now.
-
 Specifically, I didn't really leverage 32-bit word sizes or ARM's fancy optional shifting on each instruction.
+
+Additionally, the binary generated is massive...I haven't messed with linkers yet. 
+So I'm just going to leave it the way it is for now...
 
 ## QR Code Limitations
 
@@ -27,8 +29,8 @@ Requires ARM cross compiler - `apt-get install gcc-arm-linux-gnueabihf`
 
 I'm still new to GDB, but this worked for me.
 
-- `make && make debug`
-- `arm-none-eabi-gdb -ex 'file bin/qrcode' -ex 'target remote localhost:1234' -ex 'layout regs'`
+- `make && make qemu`
+- `make debug`
 
 For sanity checking this ugly thing, see my notes in [docs/3Q-test.md](docs/3Q-test.md)
 

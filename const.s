@@ -14,3 +14,4 @@
             .equ  ASCII_SPACE, 0x20        // ' '  in ASCII
             .equ  ASCII_ZERO,  0x30        // '0'  in ASCII
             .equ  ASCII_ONE,   0x31        // '1'  in ASCII
+            .equ  ASCII_TWO,   0x32        // '2'  in ASCII

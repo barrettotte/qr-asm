@@ -279,3 +279,7 @@ Verify PBM header 2nd line - `x/6ub &line_buff`
 
 0x?????:        50      57      32      50      57      10
 ```
+
+### PBM Body
+
+Verify ubyte to ASCII binary string worked - `x/9ub &bin_string`, `x/9ub &aub2b_buf`
