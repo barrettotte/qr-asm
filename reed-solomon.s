@@ -596,3 +596,5 @@ _rs_err1:
 _rs_done:
             pop   {r4-r11, lr}             // restore caller's vars + return address
             bx    lr                       // return from subroutine
+
+            .end                           // end of source

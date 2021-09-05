@@ -97,3 +97,5 @@ _aui2d_rev_next:
 
             pop   {r4-r11, lr}             // restore caller's vars + return address
             bx    lr                       // return from subroutine
+
+            .end                           // end of source
