@@ -127,48 +127,34 @@ add_finder:                                // ***** Add a finder pattern to QR m
             and   r4, r3, #MASK_B1         // get x position
             lsr   r4, r4, #8               // shift over 1 byte
             and   r5, r3, #MASK_B0         // get y position
-            mov   r8, #9                   // init width constant
 
-_af_sep:                                   // add finder's separator square
-            eor   r1, r1, r1               // reset sq_args
-            sub   r6, r4, #1               // x - 1
-            orr   r1, r1, r6, lsl #24      // set x position
-            sub   r6, r5, #1               // y - 1
-            orr   r1, r1, r6, lsl #16      // set y position
-            orr   r1, r1, r8, lsl #8       // set square width
-            orr   r1, r1, #MOD_RLT         // set fill character
-            bl    add_square               // add square to QR matrix
-            
-_af_out:                                   // add finder's outer square
+            sub   r4, r4, #1               // init x position
+            sub   r5, r5, #1               // init y position
+            mov   r8, #9                   // init width constant
+            mov   r7, #0                   // init is_dark = false
+            mov   r6, #0                   // i = 0
+_af_loop:
             eor   r1, r1, r1               // reset sq_args
             orr   r1, r1, r4, lsl #24      // set x position
             orr   r1, r1, r5, lsl #16      // set y position
-            sub   r8, r8, #2               // width -= 2
             orr   r1, r1, r8, lsl #8       // set square width
-            orr   r1, r1, #MOD_RDK         // set fill character
-            bl    add_square               // add square to QR matrix
 
-_af_in:                                    // add finder's inner square
-            eor   r1, r1, r1               // reset sq_args
-            add   r6, r4, #1               // x + 1
-            orr   r1, r1, r6, lsl #24      // set x position
-            add   r6, r5, #1               // y + 1
-            orr   r1, r1, r6, lsl #16      // set y position
-            sub   r8, r8, #2               // width -= 2
-            orr   r1, r1, r8, lsl #8       // set square width
+            cmp   r7, #1                   // is_dark?
+            beq   _af_dkmod                //
             orr   r1, r1, #MOD_RLT         // set fill character
-            bl    add_square               // add square to QR matrix
-
-_af_ctr:                                   // add finder's center square
-            eor   r1, r1, r1               // reset sq_args
-            add   r6, r4, #2               // x + 2
-            orr   r1, r1, r6, lsl #24      // set x position
-            add   r6, r5, #2               // y + 2
-            orr   r1, r1, r6, lsl #16      // set y position
-            sub   r8, r8, #2               // width -= 2
-            orr   r1, r1, r8, lsl #8       // set square width
+            b     _af_square               // skip next two lines
+_af_dkmod:
             orr   r1, r1, #MOD_RDK         // set fill character
+_af_square:
             bl    add_square               // add square to QR matrix
+            add   r4, r4, #1               // x++
+            add   r5, r5, #1               // y++
+            sub   r8, r8, #2               // width -= 2
+            eor   r7, r7, #1               // is_dark = !is_dark
+
+            add   r6, r6, #1               // i++
+            cmp   r6, #4                   // check loop condition
+            blt   _af_loop                 // while (i < 4)
 
             pop   {r4-r11, lr}             // restore caller's vars + return address
             bx    lr                       // return from subroutine
