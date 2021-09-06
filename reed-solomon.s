@@ -3,18 +3,17 @@
             // exports
             .global reed_solomon  // Reed-Solomon error correction
             
-            // internal:
-            //
-            // new_msg_poly - build polynomial from message
-            // new_gen_poly - build generator polynomial
-            // gf256_mul    - multiplication in Galois Field 2^8
-            // gf256_inv    - inversion in Galois Field 2^8
-            // gf256_div    - division in Galoi field 2^8
-            // poly_clr     - reset a polynomial's data
-            // poly_norm    - polynomial normalization
-            // poly_add     - polynomial addition
-            // poly_mul     - polynomial multiplication
-            // poly_rem     - find remainder of polynomial long division
+            // internal subroutines
+            //   new_msg_poly - build polynomial from message
+            //   new_gen_poly - build generator polynomial
+            //   gf256_mul    - multiplication in Galois Field 2^8
+            //   gf256_inv    - inversion in Galois Field 2^8
+            //   gf256_div    - division in Galoi field 2^8
+            //   poly_clr     - reset a polynomial's data
+            //   poly_norm    - polynomial normalization
+            //   poly_add     - polynomial addition
+            //   poly_mul     - polynomial multiplication
+            //   poly_rem     - find remainder of polynomial long division
 
             // constants
             .equ  POLY_SIZE, 128  // max terms in a polynomial

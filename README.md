@@ -1,37 +1,35 @@
 # qr-asm
 
-Generate a QR code image from scratch with only ARM assembly.
+Generate a QR code from scratch with only ARM assembly.
 
 This was made just to learn how QR codes work and to learn ARM assembly with a really challenging project.
 
-## Disclaimer
+<figure>
+  <img src="./docs/asm_qrcode.png" alt="QR code to my GitHub profile."/>
+  <figcaption>
+    A byte mode QR code of 
+    <a href="https://github.com/barrettotte">https://github.com/barrettotte</a> using Q error correction level.
+  </figcaption>
+</figure>
 
-The biggest thing is that **this hasn't been fully tested**. I got my one scenario working and that's good enough
-for me. I'd test some others, but I'm not looking for trouble.
+## Usage
 
-If its not obvious I'm bad at assembly...I'm sure there are a disgusting amount of optimizations I could have done. 
-But, I tried to keep things simple so a dummy like me could understand this a year from now.
-Specifically, I didn't really leverage 32-bit word sizes or ARM's fancy optional shifting on each instruction.
+`Usage: qrcode msg err_lvl`
 
-Additionally, the binary generated is massive...I haven't messed with linkers yet. 
-So I'm just going to leave it the way it is for now...
+valid error levels: `L=1, M=0, Q=3, H=2`
 
-## QR Code Limitations
+My primary test - `./bin/qrcode "https://github.com/barrettotte" 3`
+
+Quick build and test - `make && make test`
+
+## Limitations
 
 I constrained the QR code generation a lot. I just wanted to encode a url, not build a whole library.
 
 - Byte mode encoding only
 - QR version 4 and below (up to 80 characters with v4-L)
 - Mask evaluation not implemented, hardcoded to mask 0 (I think masks only effect scan efficiency)
-
-## Usage
-
-`Usage: qrcode msg err_lvl`
-
-My primary test - `./bin/qrcode "https://github.com/barrettotte" 3`
-
-error levels: `L=1, M=0, Q=3, H=2`
-
+- Instead of implementing an entire image file spec, I used [PBM](https://en.wikipedia.org/wiki/Netpbm) files to create my QR code image.
 
 ### Debugging with GDB
 
