@@ -26,10 +26,14 @@
             .data
 
             // error Messages
-err_01:     .asciz "Invalid error correction level.\n"
+err_01:     .string "Invalid error correction level.\n"
             .equ   err_01_len, (.-err_01)
-err_02:     .asciz "Only QR versions 1-4 are supported.\n"
+err_02:     .string "Only QR versions 1-4 are supported.\n"
             .equ   err_02_len, (.-err_02)
+err_03:     .string "Usage: qrcode msg err_lvl\n"
+            .equ   err_03_len, (.-err_03)
+err_04:     .string "Message size too large.\n"
+            .equ   err_04_len, (.-err_04)
 
             // lookup tables
 tbl_eclvl:                                 // error correction level lookup
@@ -67,9 +71,8 @@ tbl_ecprops:                               // error correction config lookup
 tbl_rem:    .byte 0, 7, 7, 7               // remainder lookup (v1-4)
 
             // variables
-msg:        .asciz "https://github.com/barrettotte"
-            .equ msg_len, (.-msg)          // (30 bytes) TODO: from cmd line args
-
+msg:        .space MAX_DATA_CAP            // message (from stdin)
+msg_len:    .space 1                       // message length
 out_file:   .asciz "qrcode.pbm"            // (10 bytes)
 
 version:    .space 1                       // QR code version (zero indexed)
@@ -98,24 +101,42 @@ data_bin:   .space MAX_PAYLOAD*8           // payload converted to binary ASCII 
             .text
 
 _start:                                    // ***** program entry point *****
-            mov   r0, #0                   // i = 0
-            mov   r1, #msg_len             // length;  TODO: get from command line args
-            ldr   r2, =msg                 // pointer; TODO: get from command line args
+            ldr   r0, [sp]                 // get argv[0] = argc
+            cmp   r0, #3                   // check argc
+            blt   bad_argc                 // if (argc < 3)
 
-save_args:                                 // ***** save command line arguments to memory *****
-            mov   r0, #2                   // TODO: get from command line args  offset 2=Q
-            ldr   r1, =eclvl_idx           // pointer to error correction index
-            strb  r0, [r1]                 // store error correction index
+            ldr   r1, [sp, #8]             // get argv[1]; message
+            ldr   r2, =msg                 // pointer to message
+            mov   r3, #0                   // i = 0
+_msg_loop:
+            ldrb  r4, [r1, r3]             // c = argv[i]
+            cmp   r4, #0x00                // check loop condition
+            beq   _msg_done                // done copy
+            strb  r4, [r2, r3]             // msg[i] = c
+            add   r3, r3, #1               // i++
+            b    _msg_loop                 // while (1)
+_msg_done:
+            cmp   r3, #MAX_DATA_CAP        // check if message too large
+            bgt   bad_msglen               // if (msg_len > MAX)
+
+            ldr   r4, =msg_len             // pointer to message length
+            strb  r3, [r4]                 // save message length
 
 set_eclvl:                                 // ***** set error correction level *****
+            ldr   r5, [sp, #12]            // get argv[2]
+            ldrb  r5, [r5]                 // error level ASCII
+            cmp   r5, #51                  // check '3'
+            bgt   bad_eclvl                // if (argv[2] > 51)
+            cmp   r5, #48                  // check '0'
+            blt   bad_eclvl                // if (argv[2] < 48)
+
             ldr   r1, =eclvl_idx           // pointer to error correction index
-            ldrb  r0, [r1]                 // load error correction index
-            mov   r1, #4                   // size of error correction table
-            cmp   r0, r1                   // check error correction
-            bhi   bad_eclvl                // branch if error correction invalid
+            sub   r5, r5, #48              // convert ASCII number to decimal
+            sub   r5, r5, #1               // zero index error correction level
+            strb  r5, [r1]                 // save error correction index
 
             ldr   r1, =tbl_eclvl           // pointer to error correction table
-            ldrb  r0, [r1, r0]             // lookup error correction value
+            ldrb  r0, [r1, r5]             // lookup error correction value
             ldr   r1, =eclvl               // pointer to error correction level
             strb  r0, [r1]                 // save error correction level
 
@@ -124,10 +145,10 @@ find_version:                              // ***** find QR version *****
             ldr   r1, =eclvl_idx           // pointer to error correction index
             ldrb  r1, [r1]                 // i = eclvl
             ldr   r2, =tbl_version         // pointer to version table
-            mov   r3, #msg_len             // load message length
-            sub   r3, r3, #1               // msg_len --; null terminator  (TODO: remove ?)
+            ldr   r3, =msg_len             // pointer to message length
+            ldrb  r3, [r3]                 // load message length
             ldr   r4, =count_ind           // pointer to char count indicator
-            strb  r3, [r4]                 // save msg_len-1 as char count indicator byte
+            strb  r3, [r4]                 // save msg_len as char count indicator byte
             mov   r4, #MAX_VERSION         // load max QR version supported
 
 version_loop:                              // ***** search version lookup table *****
@@ -188,8 +209,8 @@ init_dw:                                   // ***** init data words *****
             add   r6, r6, #1               // dw_idx++
 
             ldr   r2, =msg                 // pointer to message
-            mov   r5, #msg_len             // load msg_len for loop exit
-            sub   r5, r5, #1               // msg_len --; null terminator  (TODO: remove ?)
+            ldr   r5, =msg_len             // pointer to message length
+            ldrb  r5, [r5]                 // load msg_len for loop exit
             mov   r8, #0                   // msg_idx = 0
 msg_loop:                                  // ***** load message into data words array *****
             eor   r0, r0, r0               // reset scratch register for low nibble
@@ -330,6 +351,7 @@ _pay_ecw_next:
 
             ldr   r9, =pyld_size           // pointer to payload size
             strb  r4, [r9]                 // store size of payload
+
 qr_init:                                   // ***** QR matrix init *****
             ldr   r5, =version             // pointer to version
             ldrb  r5, [r5]                 // load version
@@ -364,7 +386,7 @@ qr_bin_loop:
             cmp   r7, r4                   // check loop condition
             blt   qr_data_loop             // while (i < payload_bytes)
 
-qr_remainder:
+qr_remainder:                              // ***** Calculate remainder bits *****
             lsl   r4, r4, #3               // convert size to bits; 2^3 = 8
             ldr   r7, =tbl_rem             // pointer to remainder table
             ldr   r6, =version             // pointer to version
@@ -385,7 +407,7 @@ qr_rem_loop:
             ldr   r7, =pyld_bits           // pointer to payload size in bits
             strh  r4, [r7]                 // store calculated payload size
 
-qr_fill:
+qr_fill:                                   // ****** Populate QR matrix *****
             ldr   r0, =qr_mat              // pointer to QR matrix
             mov   r2, r11                  // pass qr_width
             ldr   r3, =version             // pointer to version
@@ -406,24 +428,32 @@ qr_fill:
             bl    qr_quiet                 // add quiet zone to QR matrix
             add   r2, r2, #8               // add quiet zone width
 
+qr_pbm:                                    // ***** Output QR matrix to PBM file *****
             bl    qr_normalize             // normalize QR matrix to ['0','1']
             ldr   r1, =out_file            // pointer to PBM file name
             mov   r3, r2                   // use width for PBM width + length (square)
             bl    pbm_write                // create new PBM file from QR matrix
 
-            nop  // ****************************************************************
-            nop  //     END OF PROGRAM !!!!  TODO: remove when finished developing
-            nop  // ****************************************************************
+            b     _end                     // end of main program flow
 
-            b     _end
 bad_eclvl:                                 // ***** invalid error correction level *****
             ldr   r1, =err_01              // pointer to buffer address
-            mov   r2, #err_01_len          // length
+            mov   r2, #err_01_len          // string length
             b     error_exit               // exit program with error
 
 bad_version:                               // ***** invalid version *****
             ldr   r1, =err_02              // pointer to buffer address
-            mov   r2, #err_02_len          // length
+            mov   r2, #err_02_len          // string length
+            b     error_exit               // exit program with error
+
+bad_argc:                                  // ***** invalid arguments *****
+            ldr   r1, =err_03              // pointer to buffer address
+            mov   r2, #err_03_len          // string length
+            b     error_exit               // exit program with error
+
+bad_msglen:                                // ***** invalid message length *****
+            ldr   r1, =err_04              // pointer to buffer address
+            mov   r2, #err_04_len          // string length
             b     error_exit               // exit program with error
 
 error_exit:                                // ***** exit with error *****

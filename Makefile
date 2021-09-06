@@ -2,6 +2,8 @@
 
 OUT = bin
 BIN = qrcode
+BINARGS = "https://github.com/barrettotte" 3
+
 SRC := $(patsubst %.s,%.o,$(wildcard *.s))
 
 AS = arm-none-eabi-as
@@ -36,7 +38,10 @@ clean:
 			rm -f qrcode.pbm
 
 qemu:		.FORCE
-			qemu-arm -singlestep -g 1234 $(OUT)/$(BIN)
+			qemu-arm -singlestep -g 1234 $(OUT)/$(BIN) $(BINARGS)
 
 debug:		.FORCE
 			$(GDB) $(DBGARGS)
+
+test:
+			./$(OUT)/$(BIN) $(BINARGS)

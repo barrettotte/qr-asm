@@ -24,9 +24,14 @@ I constrained the QR code generation a lot. I just wanted to encode a url, not b
 - QR version 4 and below (up to 80 characters with v4-L)
 - Mask evaluation not implemented, hardcoded to mask 0 (I think masks only effect scan efficiency)
 
-## Running Locally
+## Usage
 
-Requires ARM cross compiler - `apt-get install gcc-arm-linux-gnueabihf`
+`Usage: qrcode msg err_lvl`
+
+My primary test - `./bin/qrcode "https://github.com/barrettotte" 3`
+
+error levels: `L=1, M=0, Q=3, H=2`
+
 
 ### Debugging with GDB
 
