@@ -4,11 +4,12 @@ Generate a QR code from scratch with only ARM assembly.
 
 This was made just to learn how QR codes work and to learn ARM assembly with a really challenging project.
 
-<figure>
+<figure align="center">
   <img src="./docs/asm_qrcode.png" alt="QR code to my GitHub profile."/>
   <figcaption>
     A byte mode QR code of 
     <a href="https://github.com/barrettotte">https://github.com/barrettotte</a> using Q error correction level.
+    <br>See <a href="qrcode.pbm">qrcode.pbm</a> for the raw image file.
   </figcaption>
 </figure>
 
@@ -29,7 +30,7 @@ I constrained the QR code generation a lot. I just wanted to encode a url, not b
 - Byte mode encoding only
 - QR version 4 and below (up to 80 characters with v4-L)
 - Mask evaluation not implemented, hardcoded to mask 0 (I think masks only effect scan efficiency)
-- Instead of implementing an entire image file spec, I used [PBM](https://en.wikipedia.org/wiki/Netpbm) files to create my QR code image.
+- Instead of implementing an entire image file format, I used the [PBM](https://en.wikipedia.org/wiki/Netpbm) file format to create my QR code image.
 
 ### Debugging with GDB
 
