@@ -85,7 +85,7 @@ count_ind:  .space 1                       // character count indicator byte
 pyld_size:  .space 1                       // calculated size of payload
 pyld_bits:  .space 2                       // payload size in bits   TODO: needed?
 qr_width:   .space 1                       // width of QR matrix
-bin_string: .space 8+1                     // temp for byte to binary ASCII string convert
+bin_str:    .space 8+1                     // temp for byte to binary ASCII string convert
 
 data_words: .space MAX_DATA_CAP            // all data words
 dw_block:   .space MAX_DWB                 // data word block
@@ -93,6 +93,7 @@ ecw_blocks: .space MAX_ECWB*MAX_G1B        // all error correction blocks
 ecw_block:  .space MAX_ECWB                // error correction words block
 payload:    .space MAX_PAYLOAD             // payload of data and error correction blocks
 qr_mat:     .space MAX_QR_SIZE, ASCII_ZERO // QR code matrix; ASCII bytes
+data_bin:   .space MAX_PAYLOAD*8           // payload converted to binary ASCII string
 
             .text
 
@@ -327,19 +328,8 @@ _pay_ecw_next:
             cmp   r1, r3                   // check loop condition
             blt   _pay_ecw_loop            // while (i < ECW per block)
 
-add_remainder:                             // ***** add remainder bits *****
             ldr   r9, =pyld_size           // pointer to payload size
             strb  r4, [r9]                 // store size of payload
-
-            lsl   r4, r4, #3               // convert size to bits; 2^3 = 8            // TODO: needed?
-            ldr   r5, =tbl_rem             // pointer to remainder table               // TODO: needed?
-            ldr   r6, =version             // pointer to version                       // TODO: needed?
-            ldrb  r6, [r6]                 // load version                             // TODO: needed?
-            ldrb  r6, [r5, r6]             // tbl_rem[version] = remainder             // TODO: needed?
-            add   r4, r4, r6               // bits = (payload bytes * 8) + remainder   // TODO: needed?
-            ldr   r5, =pyld_bits           // pointer to payload size in bits          // TODO: needed?
-            strh  r4, [r5]                 // store calculated payload size            // TODO: needed?
-
 qr_init:                                   // ***** QR matrix init *****
             ldr   r5, =version             // pointer to version
             ldrb  r5, [r5]                 // load version
@@ -348,25 +338,77 @@ qr_init:                                   // ***** QR matrix init *****
             ldr   r3, =qr_width            // pointer to QR code width
             strb  r2, [r3]                 // save QR width
             mov   r6, r0                   // retain pointer to payload
+            mov   r11, r2                  // retain QR width
+
+            ldr   r0, =bin_str             // pointer to temp buffer
+            ldr   r5, =data_bin            // pointer to full binary string
+            mov   r8, #0                   // bit_idx = 0
+            mov   r7, #0                   // i = 0
+qr_data_loop:
+            ldr   r9, [r6, r7]             // payload[i]
+            mov   r2, r9                   // ubyte to convert
+            bl    ascii_ubyte2bin          // convert ubyte to bin string
+
+            mov   r9, #0                   // j = 0
+qr_bin_loop:
+            ldrb  r1, [r0, r9]             // bin_str[j]
+            add   r2, r8, r9               // x = bit_idx + j
+            strb  r1, [r5, r2]             // data_bin[bit_idx] = bin_str[j]
+
+            add   r9, r9, #1               // j++
+            cmp   r9, #8                   // check loop condition
+            blt   qr_bin_loop              // while (j < 8)
+
+            add   r7, r7, #1               // i++
+            add   r8, r8, #8               // bit_idx += 8
+            cmp   r7, r4                   // check loop condition
+            blt   qr_data_loop             // while (i < payload_bytes)
+
+qr_remainder:
+            lsl   r4, r4, #3               // convert size to bits; 2^3 = 8
+            ldr   r7, =tbl_rem             // pointer to remainder table
+            ldr   r6, =version             // pointer to version
+            ldrb  r6, [r6]                 // load version
+            ldrb  r6, [r7, r6]             // tbl_rem[version] = remainder
+
+            mov   r9, #0                   // i = 0
+qr_rem_loop:
+            add   r2, r8, r9               // x = bit_idx + i
+            mov   r7, #ASCII_ZERO          // load '0'
+            strb  r7, [r5, r2]             // data[x] = '0'
+
+            add   r9, r9, #1               // i++
+            cmp   r9, r6                   // check loop condition
+            blt   qr_rem_loop              // while (i < remainder_bits)
+
+            add   r4, r4, r6               // bits = (payload bytes * 8) + remainder
+            ldr   r7, =pyld_bits           // pointer to payload size in bits
+            strh  r4, [r7]                 // store calculated payload size
 
             ldr   r0, =qr_mat              // pointer to QR matrix
-            mov   r3, r5                   // pass version
+            mov   r2, r11                  // pass qr_width
+            ldr   r3, =version             // pointer to version
+            ldrb  r3, [r3]                 // load version
             bl    qr_reserved              // add reserved areas to QR matrix
 
-            nop   @ TODO: check
+            mov   r1, r5                   // pointer to binary string
+            mov   r2, r11                  // pass qr_width
+            mov   r3, r4                   // load payload size in bits
+            bl    qr_zigzag                // add payload to QR matrix
 
             ldr   r0, =qr_mat              // pointer to QR matrix
             ldr   r1, =out_file            // pointer to PBM file name
-            ldr   r2, =qr_width            // pointer to QR code width
-            ldrb  r2, [r2]                 // load width
+            mov   r2, r11                  // pass qr_width
             bl    qr_normalize             // normalize QR matrix to ['0','1']
 
+            mov   r2, r11                  // pass qr_width
             mov   r3, r2                   // use width for PBM width + length (square)
             bl    pbm_write                // create new PBM file from QR matrix
 
             nop  // ****************************************************************
             nop  //     END OF PROGRAM !!!!  TODO: remove when finished developing
             nop  // ****************************************************************
+
             b     _end
 bad_eclvl:                                 // ***** invalid error correction level *****
             ldr   r1, =err_01              // pointer to buffer address

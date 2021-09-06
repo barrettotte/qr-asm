@@ -5,8 +5,8 @@
             // exports
             .global qr_reserved         // add reserved areas to QR matrix
             .global qr_normalize        // normalize QR matrix to ['0','1']
+            .global qr_zigzag           // "zigzag" payload into QR matrix
 
-            @ TODO: .global qr_zigzag           // "zigzag" payload into QR matrix
             @ TODO: .global qr_mask0            // apply mask 0 to QR matrix
             @ TODO: .global qr_fmtbits          // add format bits to QR matrix
             @ TODO: .global qr_quiet            // add quiet zone to QR matrix
@@ -303,6 +303,18 @@ _qrn_x_next:
             add   r4, r4, #1               // i++
             cmp   r4, r2                   // check loop condition
             blt   _qrn_x_loop              // while (i < qr_width)
+
+            pop   {r4-r11, lr}             // restore caller's vars + return address
+            bx    lr                       // return from subroutine
+
+qr_zigzag:                                 // ***** "zigzag" payload into QR matrix *****
+                                           // r0 - pointer to QR matrix
+                                           // r1 - pointer to payload
+                                           // r2 - QR matrix width
+                                           // r3 - payload size in bits
+            push  {r4-r11, lr}             // save caller's vars + return address
+
+            nop
 
             pop   {r4-r11, lr}             // restore caller's vars + return address
             bx    lr                       // return from subroutine
