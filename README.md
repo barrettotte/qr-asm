@@ -2,16 +2,21 @@
 
 Generate a QR code from scratch with only ARM assembly.
 
-This was made just to learn how QR codes work and to learn ARM assembly with a really challenging project.
-
-<figure align="center">
+<br>
+<div align="center">
   <img src="./docs/asm_qrcode.png" alt="QR code to my GitHub profile."/>
-  <figcaption>
-    A byte mode QR code of 
-    <a href="https://github.com/barrettotte">https://github.com/barrettotte</a> using Q error correction level.
-    <br>See <a href="qrcode.pbm">qrcode.pbm</a> for the raw image file.
-  </figcaption>
-</figure>
+  <p>A byte mode QR code of <a href="https://github.com/barrettotte">https://github.com/barrettotte</a> using Q error correction level.
+  <br>See <a href="qrcode.pbm">qrcode.pbm</a> for the raw image file.</p>
+</div>
+
+## Why?
+
+At first, I learned how QR codes worked with an ugly python implementation; See [docs/python](docs/python).
+Midway through the python implementation, I started to learn ARM assembly. But, I had no idea what to build
+to practice my knowledge.
+
+So, this project turned into a giant coding challenge just to see if I could do it.
+In a world where C exists, you should obviously never use assembly for this type of project/application.
 
 ## Usage
 
