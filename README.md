@@ -22,7 +22,7 @@ I constrained the QR code generation a lot. I just wanted to encode a url, not b
 
 - Byte mode encoding only
 - QR version 4 and below (up to 80 characters with v4-L)
-- Mask evaluation not implemented, hardcoded to TODO: ?
+- Mask evaluation not implemented, hardcoded to mask 0 (I think masks only effect scan efficiency)
 
 ## Running Locally
 

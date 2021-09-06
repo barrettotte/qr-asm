@@ -8,8 +8,7 @@
             .global qr_zigzag              // "zigzag" payload into QR matrix
             .global qr_fmtbits             // add format bits to QR matrix
             .global qr_mask0               // apply mask 0 to QR matrix
-            
-            @ TODO: .global qr_quiet            // add quiet zone to QR matrix
+            .global qr_quiet               // add quiet zone to QR matrix
 
             // internal subroutines
             //   add_square   - add a square to QR matrix
@@ -318,12 +317,12 @@ _qrn_x_loop:
 _qrn_y_loop:
             ldrb  r6, [r0, r9]             // qr_mat[qr_idx]
 
-            cmp   r6, #MOD_EMP             // check if reserved empty
-            beq   _qrn_ltmod               // normalize to light
-            cmp   r6, #MOD_RLT             // check if reserved light
-            beq   _qrn_ltmod               // normalize to light
-            cmp   r6, #MOD_RDK             // check if reserved dark
-            beq   _qrn_dkmod               // normalize to dark
+            cmp   r6, #MOD_EMP             // check if empty module
+            beq   _qrn_ltmod               // normalize to data light module
+            cmp   r6, #MOD_RLT             // check if reserved light module
+            beq   _qrn_ltmod               // normalize to data light module
+            cmp   r6, #MOD_RDK             // check if reserved dark module
+            beq   _qrn_dkmod               // normalize to data dark module
 
             b     _qrn_y_next              // already normalized; iterate
 _qrn_dkmod:
@@ -563,5 +562,46 @@ _qrm0_y_next:
 
             pop   {r4-r11, lr}             // restore caller's vars + return address
             bx    lr                       // return from subroutine            
+
+qr_quiet:                                  // ***** Add quiet zone to QR matrix *****
+                                           // r0 - pointer to QR matrix
+                                           // r1 - unused
+                                           // r2 - QR width
+                                           // r3 - unused
+            push  {r4-r11, lr}             // save caller's vars + return address
+
+            mov   r4, r2                   // y = qr_width
+            sub   r4, r4, #1
+_qrq_y_loop:
+            mov   r5, r2                   // x = qr_width
+            sub   r5, r5, #1
+_qrq_x_loop:
+            umull r6, r7, r4, r2           // q = y * qr_width
+            add   r6, r6, r5               // q += x
+            ldrb  r10, [r0, r6]            // mod = qr_mat[q]
+_qrq_transform:
+            push  {r10}                    // save original module
+            add   r7, r2, #8               // qr_width + 8
+            add   r8, r4, #4               // y + (8/2)
+            umull r10, r11, r8, r7         // t = (y + (8/2)) * (qr_width + 8)
+            add   r11, r10, r5             // t += x
+            add   r11, r11, #4             // t += (8/2)
+            pop   {r10}                    // restore original module
+            strb  r10, [r0, r11]           // qr_mat[t] = qr_mat[q]
+_qrq_reset:
+            mov   r10, #MOD_DLT            // light module '0'
+            strb  r10, [r0, r6]            // reset moved module
+
+_qrq_x_next:
+            sub   r5, r5, #1               // x--
+            cmp   r5, #0                   // check loop condition
+            bge   _qrq_x_loop              // while (x > 0)
+_qrq_y_next:
+            sub   r4, r4, #1               // y--
+            cmp   r4, #0                   // check loop condition
+            bge   _qrq_y_loop              // while (y > 0)
+
+            pop   {r4-r11, lr}             // restore caller's vars + return address
+            bx    lr                       // return from subroutine   
 
             .end                           // end of source

@@ -21,7 +21,7 @@
             .equ  MAX_DWB, 80              // max data words per block (v4-L)
             .equ  MAX_ECWB, 28             // max error correction words per block (v2-H)
             .equ  MAX_PAYLOAD, 255         // max size of payload to transform into QR code
-            .equ  MAX_QR_SIZE, 1096        // max modules in QR matrix; ((V*4)+21)^2, round next byte
+            .equ  MAX_QR_SIZE, 1696        // max modules in QR matrix; ((V*4)+21+8)^2, to next word
 
             .data
 
@@ -83,7 +83,7 @@ g1bw_cap:   .space 1                       // data words in each group 1 block
 count_ind:  .space 1                       // character count indicator byte
 
 pyld_size:  .space 1                       // calculated size of payload
-pyld_bits:  .space 2                       // payload size in bits   TODO: needed?
+pyld_bits:  .space 2                       // payload size in bits
 qr_width:   .space 1                       // width of QR matrix
 bin_str:    .space 8+1                     // temp for byte to binary ASCII string convert
 
@@ -403,14 +403,11 @@ qr_fill:
             bl    qr_fmtbits               // add format bits to QR matrix
 
             bl    qr_mask0                 // apply mask 0 to QR matrix
+            bl    qr_quiet                 // add quiet zone to QR matrix
+            add   r2, r2, #8               // add quiet zone width
 
-            ldr   r0, =qr_mat              // pointer to QR matrix
-            ldr   r1, =out_file            // pointer to PBM file name
-            mov   r2, r11                  // pass qr_width
             bl    qr_normalize             // normalize QR matrix to ['0','1']
-
-qr_output:
-            mov   r2, r11                  // pass qr_width
+            ldr   r1, =out_file            // pointer to PBM file name
             mov   r3, r2                   // use width for PBM width + length (square)
             bl    pbm_write                // create new PBM file from QR matrix
 
