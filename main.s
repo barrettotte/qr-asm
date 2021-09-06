@@ -9,7 +9,7 @@
 //   - Build QR code matrix using payload block and QR code specifications
 //   - Output QR code matrix to image file
 
-            .include "const.s"
+            .include "const.inc"
 
             .global _start
 
@@ -92,7 +92,7 @@ dw_block:   .space MAX_DWB                 // data word block
 ecw_blocks: .space MAX_ECWB*MAX_G1B        // all error correction blocks
 ecw_block:  .space MAX_ECWB                // error correction words block
 payload:    .space MAX_PAYLOAD             // payload of data and error correction blocks
-qr_mat:     .space MAX_QR_SIZE, ASCII_ZERO // QR code matrix; ASCII bytes
+qr_mat:     .space MAX_QR_SIZE, ASCII_TWO  // QR code matrix; ASCII bytes
 data_bin:   .space MAX_PAYLOAD*8           // payload converted to binary ASCII string
 
             .text
@@ -385,6 +385,7 @@ qr_rem_loop:
             ldr   r7, =pyld_bits           // pointer to payload size in bits
             strh  r4, [r7]                 // store calculated payload size
 
+qr_fill:
             ldr   r0, =qr_mat              // pointer to QR matrix
             mov   r2, r11                  // pass qr_width
             ldr   r3, =version             // pointer to version
@@ -396,11 +397,19 @@ qr_rem_loop:
             mov   r3, r4                   // load payload size in bits
             bl    qr_zigzag                // add payload to QR matrix
 
+            mov   r1, #0                   // hardcoded mask index
+            ldr   r3, =eclvl_idx           // pointer to error level index
+            ldrb  r3, [r3]                 // pass error level
+            bl    qr_fmtbits               // add format bits to QR matrix
+
+            bl    qr_mask0                 // apply mask 0 to QR matrix
+
             ldr   r0, =qr_mat              // pointer to QR matrix
             ldr   r1, =out_file            // pointer to PBM file name
             mov   r2, r11                  // pass qr_width
             bl    qr_normalize             // normalize QR matrix to ['0','1']
 
+qr_output:
             mov   r2, r11                  // pass qr_width
             mov   r3, r2                   // use width for PBM width + length (square)
             bl    pbm_write                // create new PBM file from QR matrix

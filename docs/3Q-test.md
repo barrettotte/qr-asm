@@ -289,3 +289,21 @@ Verify ubyte to ASCII binary string worked - `x/9ub &bin_string`, `x/9ub &aub2b_
 From this point on its a lot of visual checking.
 
 `x/567ub &data_bin`
+
+`x/9ub &fmt_hi`
+
+```
+"00110101"
+
+0x?????:        48      48      49      49      48      49      48      49
+0x?????:        0
+```
+
+`x/9ub &fmt_lo`
+
+```
+"01011111"
+
+0x?????:        48      49      48      49      49      49      49      49
+0x?????:        0
+```

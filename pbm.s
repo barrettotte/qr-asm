@@ -1,6 +1,6 @@
 // subroutines for creating a Portable Bitmap File (PBM)
 
-            .include "const.s"
+            .include "const.inc"
 
             // exports
             .global pbm_write              // write array to a new PBM file

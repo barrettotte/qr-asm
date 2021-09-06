@@ -1,10 +1,10 @@
 // subroutines for various ASCII utilities
 
-            .include "const.s"
+            .include "const.inc"
 
             // exports
-            .global ascii_uint2dec         // Convert uint to ASCII decimal string
-            .global ascii_ubyte2bin        // Convert ubyte to ASCII binary string
+            .global ascii_uint2dec         // convert uint to ASCII decimal string
+            .global ascii_ubyte2bin        // convert ubyte to ASCII binary string
 
             .data
 
@@ -15,7 +15,7 @@ one_tenth:  .word   0x1999999A             // ~((2^32)/10)+1; for quick div by 1
 
 ascii_ubyte2bin:                           // ***** Convert ubyte to ASCII binary string *****
                                            // r0 - pointer to ASCII conversion
-                                           // r1 - length of ASCII conversion (output only)
+                                           // r1 - unused
                                            // r2 - ubyte input
                                            // r3 - unused
             push  {r4-r11, lr}             // save caller's vars + return address
